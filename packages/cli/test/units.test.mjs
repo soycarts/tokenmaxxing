@@ -120,6 +120,23 @@ test('report lists unpriced models with their override note', async () => {
   assert.match(renderReport(rep), /Unpriced models \(0 tokens counted toward \$\): codex\/codex-auto-review \(1\.0k tokens — bundled reviewer, no list price\), codex\/mystery-model \(5 tokens\)/);
 });
 
+test('report lists a model listed at $0 upstream as unpriced with that note', async () => {
+  const { buildReport, renderReport } = await import('../dist/report.js');
+  const { defaultConfig } = await import('../dist/config.js');
+  const { _setTables } = await import('../dist/pricing/index.js');
+  _setTables({ litellm: { 'gemini-free-exp': { input_cost_per_token: 0, output_cost_per_token: 0 } }, modelsdev: {}, overrides: {} });
+  try {
+    const now = new Date();
+    const ts = new Date(now.getTime() - 3600e3).toISOString().slice(0, 13) + ':00:00Z';
+    const rep = buildReport([{ ...emptyBucket(ts, 'gemini', 'gemini-free-exp'), input: 700, output: 50 }], parsePeriod('7d', now), defaultConfig());
+    assert.deepEqual(rep.unpriced, [{ source: 'gemini', model: 'gemini-free-exp', tokens: 750, note: 'listed at $0 upstream' }]);
+    assert.equal(rep.rows[0].cost, null);
+    assert.match(renderReport(rep), /gemini\/gemini-free-exp \(750 tokens — listed at \$0 upstream\)/);
+  } finally {
+    _setTables({ litellm: undefined, modelsdev: undefined, overrides: undefined });
+  }
+});
+
 // --- push granularity ---
 import { periodStart, foldRows } from '../dist/site.js';
 

@@ -78,8 +78,10 @@ const snapshotDate = (ts) => /SNAPSHOT_DATE\s*=\s*['"](\d{4}-\d{2}-\d{2})['"]/.e
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
+// Listed at $0 input and $0 output upstream is not a price (unpriced), as in the CLI and the seed.
 function fromLitellm(e) {
   if (!e || !isNum(e.input_cost_per_token) || !isNum(e.output_cost_per_token)) return null;
+  if (e.input_cost_per_token === 0 && e.output_cost_per_token === 0) return null;
   const input = e.input_cost_per_token;
   const w5 = isNum(e.cache_creation_input_token_cost) ? e.cache_creation_input_token_cost : input;
   return {
@@ -93,7 +95,7 @@ function fromLitellm(e) {
 
 function fromModelsdev(provider, e) {
   const c = e?.cost;
-  if (!c || !isNum(c.input) || !isNum(c.output)) return null;
+  if (!c || !isNum(c.input) || !isNum(c.output) || (c.input === 0 && c.output === 0)) return null;
   const input = c.input / 1e6;
   const write = isNum(c.cache_write) ? c.cache_write / 1e6 : input;
   return {

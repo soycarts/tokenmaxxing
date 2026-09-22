@@ -35,12 +35,19 @@ export function _setTables(t: { litellm?: Json; modelsdev?: Json; overrides?: Js
   if ('overrides' in t) overrides = t.overrides;
   cache.clear();
   normIndex = undefined;
+  zeroCanon = undefined;
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** Note for a model that upstream lists at $0 input and $0 output: that is not a price, so it is unpriced. */
+export const ZERO_UPSTREAM_NOTE = 'listed at $0 upstream';
+
+const zeroLitellm = (e: any): boolean => !!e && e.input_cost_per_token === 0 && e.output_cost_per_token === 0;
+const zeroModelsdev = (e: any): boolean => !!e?.cost && e.cost.input === 0 && e.cost.output === 0;
+
 function fromLitellm(e: any): Rates | null {
-  if (!e || !isNum(e.input_cost_per_token) || !isNum(e.output_cost_per_token)) return null;
+  if (!e || !isNum(e.input_cost_per_token) || !isNum(e.output_cost_per_token) || zeroLitellm(e)) return null;
   const input = e.input_cost_per_token;
   const w5 = isNum(e.cache_creation_input_token_cost) ? e.cache_creation_input_token_cost : input;
   return {
@@ -54,7 +61,7 @@ function fromLitellm(e: any): Rates | null {
 
 function fromModelsdev(provider: string, e: any): Rates | null {
   const c = e?.cost;
-  if (!c || !isNum(c.input) || !isNum(c.output)) return null;
+  if (!c || !isNum(c.input) || !isNum(c.output) || zeroModelsdev(e)) return null;
   const input = c.input / 1e6;
   const write = isNum(c.cache_write) ? c.cache_write / 1e6 : input;
   return {
@@ -120,16 +127,32 @@ export function candidates(model: string): string[] {
 }
 
 let normIndex: Map<string, string> | undefined;
+let zeroCanon: Set<string> | undefined;
 function litellmCanonIndex(): Map<string, string> {
   if (normIndex) return normIndex;
   normIndex = new Map();
-  // Shortest key first so an un-prefixed id wins over bedrock/vertex variants.
-  const keys = Object.keys(tables().litellm).sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
+  zeroCanon = new Set();
+  const ll = tables().litellm;
+  // Shortest key first so an un-prefixed id wins over bedrock/vertex variants. Entries listed at $0/$0 never
+  // take the slot (they are not prices); they are only remembered for the unpriced note.
+  const keys = Object.keys(ll).sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
   for (const k of keys) {
     const c = canon(k);
-    if (!normIndex.has(c)) normIndex.set(c, k);
+    if (zeroLitellm(ll[k])) zeroCanon.add(c);
+    else if (!normIndex.has(c)) normIndex.set(c, k);
   }
   return normIndex;
+}
+
+/** True when some lookup step for this model hit an upstream entry listed at $0 input and $0 output. */
+function listedAtZero(model: string): boolean {
+  const { litellm: ll, modelsdev: md } = tables();
+  for (const c of [model, ...candidates(model)]) {
+    if (zeroLitellm(ll[c])) return true;
+    for (const provider of Object.keys(md)) if (zeroModelsdev(md[provider]?.models?.[c])) return true;
+  }
+  litellmCanonIndex();
+  return zeroCanon!.has(canon(model));
 }
 
 const cache = new Map<string, Rates | null>();
@@ -142,10 +165,14 @@ export function resolve(model: string): Rates | null {
   return r;
 }
 
-/** Note for a model pinned as unpriced in overrides.json (e.g. bundled models with no list price). */
+/**
+ * Why an unpriced model is unpriced, when we know: the note of an `unpriced` pin in overrides.json (bundled
+ * models with no list price), or ZERO_UPSTREAM_NOTE when upstream lists it at $0/$0 and nothing else prices it.
+ */
 export function unpricedNote(model: string): string | undefined {
   const e = tables().overrides[model];
-  return e && typeof e.unpriced === 'string' ? e.unpriced : undefined;
+  if (e && typeof e.unpriced === 'string') return e.unpriced;
+  return resolve(model) === null && listedAtZero(model) ? ZERO_UPSTREAM_NOTE : undefined;
 }
 
 function resolveUncached(model: string): Rates | null {

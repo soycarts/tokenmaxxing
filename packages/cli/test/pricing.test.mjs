@@ -77,6 +77,41 @@ test('LiteLLM mapping: missing cache_creation falls back to input; 1h falls back
   });
 });
 
+test('listed at $0 input and $0 output upstream = unpriced with a note; a real price elsewhere or an override wins', async () => {
+  const { unpricedNote, ZERO_UPSTREAM_NOTE } = await import('../dist/pricing/index.js');
+  assert.equal(ZERO_UPSTREAM_NOTE, 'listed at $0 upstream');
+  const zero = { input_cost_per_token: 0, output_cost_per_token: 0, litellm_provider: 'gemini' };
+  withTables({
+    litellm: {
+      'gemini-free-exp': zero,
+      'gemini/gemini-free-exp-2': zero,
+      'gemini/free-gemma': zero, // shortest id for canon "free-gemma", but not a price
+      'google.free-gemma': { input_cost_per_token: 2.3e-7, output_cost_per_token: 3.8e-7, litellm_provider: 'bedrock_converse' },
+      'gemini-overridden': zero,
+      'gemini-half-free': { input_cost_per_token: 0, output_cost_per_token: 1e-6, litellm_provider: 'gemini' },
+    },
+    modelsdev: { google: { models: { 'gemini-md-free': { cost: { input: 0, output: 0 } } } } },
+    overrides: { 'gemini-overridden': { input: 1, output: 2, source: 'https://ai.google.dev/gemini-api/docs/pricing', added: '2026-09-22' } },
+  }, () => {
+    // exact, prefixed/normalised and models.dev hits on a $0/$0 entry are unpriced, never $0
+    for (const m of ['gemini-free-exp', 'gemini-free-exp-2', 'gemini-md-free']) {
+      assert.equal(resolve(m), null, m);
+      assert.equal(unpricedNote(m), 'listed at $0 upstream', m);
+    }
+    // another entry for the same normalised model with a real price is used instead
+    assert.equal(resolve('free-gemma').input, 2.3e-7);
+    assert.equal(resolve('gemini/free-gemma').input, 2.3e-7);
+    assert.equal(unpricedNote('free-gemma'), undefined);
+    // an explicit override with a real price still wins
+    assert.equal(resolve('gemini-overridden').input, 1e-6);
+    assert.equal(unpricedNote('gemini-overridden'), undefined);
+    // only both rates at 0 counts: a free input with a paid output is a price
+    assert.equal(resolve('gemini-half-free').output, 1e-6);
+    // an unknown model gets no note
+    assert.equal(unpricedNote('gemini-unknown'), undefined);
+  });
+});
+
 test('resolution order: overrides > LiteLLM exact > models.dev exact (anthropic 1h = 1.6×)', () => {
   _setTables({
     litellm: { 'll-model': { input_cost_per_token: 1e-6, output_cost_per_token: 2e-6, cache_read_input_token_cost: 1e-7, cache_creation_input_token_cost: 1.25e-6 } },

@@ -24,6 +24,8 @@ CLI resolve(): overrides → LiteLLM → models.dev   apps/web/supabase/seed_pri
 4. **Seed SQL.** `seed-prices.mjs` resolves the same tables with the same precedence into `seed_prices.sql`, with one row per id plus a normalised-alias row per `model_key`.
 5. **Live DB.** When `seed_prices.sql` changes on `main`, `pricing-apply.yml` POSTs it to the Supabase Management API. The site computes cost at query time from `model_prices`, so it follows the new price right away. Rows are upserted and never deleted, except ids pinned `unpriced`.
 
+A model that upstream lists at $0 input and $0 output is treated as **unpriced**, not free. The CLI reports it with the note `listed at $0 upstream`; the seed emits no row, and deletes any stale one, so the site counts its tokens as `unpriced_tokens`. If another entry for the same normalised model has a real price, that price is used; an override with a real price always wins.
+
 Both the CLI and the site price **all** history at the current list price. A price cut therefore lowers everyone's past API-equivalent too. That is intended: the number answers "what would this usage cost at today's API prices".
 
 ### Commands
