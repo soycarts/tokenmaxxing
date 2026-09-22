@@ -17,15 +17,19 @@ Everything runs locally through `npx tokenmaxxing-cli`. Node 20 or newer is requ
 
    It detects installed tools, parses their logs (a 30-day history of thousands of sessions takes seconds), and prints a table of tokens and API-equivalent USD per model. Show the user the whole table.
 
-2. Offer to set their subscription plans so the report shows a value multiple. Ask which they have; do not guess. Providers and plans:
+2. Offer to set their subscription plans so the report shows a value multiple. Ask which they have and how many seats of each; do not guess. Providers and plans:
 
    ```bash
-   npx tokenmaxxing-cli plan set claude pro|max-5x|max-20x
-   npx tokenmaxxing-cli plan set openai plus|pro
-   npx tokenmaxxing-cli plan set cursor pro|pro-plus|ultra
-   npx tokenmaxxing-cli plan set google ai-pro|ai-ultra-100|ai-ultra
+   npx tokenmaxxing-cli plan add claude pro|max-5x|max-20x|team-standard|team-premium [x2]
+   npx tokenmaxxing-cli plan add openai go|plus|pro-100|pro|business [x2]
+   npx tokenmaxxing-cli plan add cursor pro|pro-plus|ultra|teams [x2]
+   npx tokenmaxxing-cli plan add google ai-plus|ai-pro|ai-ultra-100|ai-ultra [x2]
+   npx tokenmaxxing-cli plan add openai custom 100 "Codex $100 promo"   # a price not in the list
+   npx tokenmaxxing-cli plan list
    npx tokenmaxxing-cli report
    ```
+
+   `plan add` adds a line (several plans from one provider add up); `plan set` replaces a provider's plans; `plan remove <provider> [<plan>]` takes one off.
 
 3. Only if the user wants to publish, link the machine. This is opt-in:
 
