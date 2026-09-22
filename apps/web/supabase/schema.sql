@@ -206,6 +206,23 @@ create policy "buckets read own" on public.buckets
 
 revoke insert, update, delete on public.buckets from anon, authenticated;
 
+-- v0.2 push granularity. The CLI may fold its hourly buckets into daily (ts = 00:00 UTC) or
+-- weekly (ts = Monday 00:00 UTC) totals before pushing; the row says which. The primary key
+-- is unchanged, and every aggregate sums over ts ranges, so coarse rows need nothing else.
+alter table public.buckets add column if not exists granularity text not null default 'hour';
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'buckets_granularity_check' and conrelid = 'public.buckets'::regclass
+  ) then
+    alter table public.buckets add constraint buckets_granularity_check check (
+      granularity in ('hour', 'day', 'week')
+      and (granularity = 'hour' or extract(epoch from ts)::bigint % 86400 = 0)
+      and (granularity <> 'week' or extract(isodow from ts at time zone 'utc') = 1)
+    );
+  end if;
+end $$;
+
 -- ---------------------------------------------------------------------------------- orgs
 create table if not exists public.orgs (
   id uuid primary key default gen_random_uuid(),
@@ -301,6 +318,49 @@ create policy "model prices readable" on public.model_prices
   using (true);
 
 revoke insert, update, delete on public.model_prices from anon, authenticated;
+
+-- ------------------------------------------------------------------------------ sponsors
+-- Sponsored placements (v0.2, scaffold only: no billing, rows are added by hand in SQL).
+-- Anyone may read a sponsor while it is active and inside its window; nobody writes through
+-- the API. Impressions are counted server-side by record_sponsor_impression().
+create table if not exists public.sponsors (
+  id uuid primary key default gen_random_uuid(),
+  slug text unique not null check (slug ~ '^[a-z0-9-]{2,48}$'),
+  name text not null check (char_length(name) between 1 and 64),
+  tagline text not null default '' check (char_length(tagline) <= 80),
+  url text not null check (url ~ '^https://' and char_length(url) <= 512),
+  logo_url text check (logo_url is null or (logo_url ~ '^https://' and char_length(logo_url) <= 512)),
+  placements text[] not null default '{}' check (placements <@ array[
+    'leaderboard:value', 'leaderboard:roi', 'leaderboard:efficiency', 'leaderboard:volume',
+    'leaderboard:orgs', 'profile'
+  ]::text[]),
+  starts_at timestamptz not null default now(),
+  ends_at timestamptz not null default now() + interval '30 days',
+  active boolean not null default false,
+  created_at timestamptz not null default now(),
+  check (ends_at > starts_at)
+);
+create index if not exists sponsors_placements_idx on public.sponsors using gin (placements);
+
+alter table public.sponsors enable row level security;
+
+drop policy if exists "sponsors read live" on public.sponsors;
+create policy "sponsors read live" on public.sponsors
+  for select to anon, authenticated
+  using (active and now() between starts_at and ends_at);
+
+revoke insert, update, delete on public.sponsors from anon, authenticated;
+
+create table if not exists public.sponsor_impressions (
+  sponsor_id uuid not null references public.sponsors (id) on delete cascade,
+  day date not null,
+  placement text not null,
+  count int not null default 0 check (count >= 0),
+  primary key (sponsor_id, day, placement)
+);
+
+alter table public.sponsor_impressions enable row level security;
+revoke all on public.sponsor_impressions from anon, authenticated;
 
 -- ============================================================== aggregates (internal)
 -- These see every user's rows. They are SECURITY DEFINER and granted to nobody but the
@@ -465,7 +525,11 @@ $$;
 -- Home page tiles.
 drop function if exists public.site_stats();
 create function public.site_stats()
-returns table (week_usd numeric, users_tracking int, public_users int, top_model text, top_model_usd numeric)
+-- month_usd (v0.2, for /sponsors) is the 30-day total over public profiles only, like week_usd.
+returns table (
+  week_usd numeric, users_tracking int, public_users int, top_model text, top_model_usd numeric,
+  month_usd numeric
+)
 language sql stable security definer set search_path = '' as $$
   with wk as (
     select x.* from public._priced('week') x
@@ -473,13 +537,18 @@ language sql stable security definer set search_path = '' as $$
     where p.public
   ), best as (
     select wk.model, sum(wk.usd) as usd from wk where wk.priced group by wk.model order by 2 desc limit 1
+  ), mo as (
+    select x.usd from public._priced('month') x
+    join public.profiles p on p.id = x.user_id
+    where p.public
   )
   select
     coalesce((select round(sum(wk.usd), 2) from wk), 0),
     (select count(distinct b.user_id)::int from public.buckets b where b.ts >= now() - interval '30 days'),
     (select count(*)::int from public.profiles p where p.public),
     (select best.model from best),
-    (select round(best.usd, 2) from best)
+    (select round(best.usd, 2) from best),
+    coalesce((select round(sum(mo.usd), 2) from mo), 0)
 $$;
 
 -- Everything /u/[handle] shows, as one JSON document. Null if the profile does not exist or
@@ -526,6 +595,16 @@ begin
     'cache_read_ratio', v_ratio,
     'unpriced_tokens', v_unpriced,
     'sources', to_jsonb(v_sources),
+    -- v0.2: how coarse the rows from the most recently pushed device are (hour|day|week).
+    'granularity', coalesce((
+      select b.granularity from public.buckets b
+      where b.device_id = (
+        select d.id from public.devices d
+        where d.user_id = pr.id and d.last_push_at is not null
+        order by d.last_push_at desc limit 1
+      )
+      order by b.ts desc limit 1
+    ), 'hour'),
     'models', coalesce((
       select jsonb_agg(jsonb_build_object(
         'source', m.source, 'model', m.model, 'input', m.input, 'cache_read', m.cache_read,
@@ -715,6 +794,55 @@ language sql volatile security definer set search_path = '' as $$
   select upd.token_plain, p.handle from upd join public.profiles p on p.id = upd.user_id
 $$;
 
+-- POST /api/v1/push with `replaceDevice: true`: drop every row the device holds and write the
+-- batch, in one transaction, so a push that changes granularity never double counts. The user
+-- comes from the device row, never from the payload. Returns the number of rows written.
+create or replace function public.replace_device_buckets(p_device uuid, p_rows jsonb)
+returns int language plpgsql volatile security definer set search_path = '' as $$
+declare
+  v_user uuid;
+  n int;
+begin
+  select d.user_id into v_user from public.devices d where d.id = p_device;
+  if v_user is null then raise exception 'no such device' using errcode = 'P0002'; end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' then
+    raise exception 'p_rows must be a JSON array' using errcode = '22023';
+  end if;
+
+  delete from public.buckets b where b.device_id = p_device;
+
+  insert into public.buckets (
+    user_id, device_id, ts, source, model, granularity,
+    input, cache_read, cache_write_5m, cache_write_1h, output, reasoning, requests, conversations
+  )
+  select v_user, p_device, r.ts, r.source, r.model, coalesce(r.granularity, 'hour'),
+    coalesce(r.input, 0), coalesce(r.cache_read, 0), coalesce(r.cache_write_5m, 0),
+    coalesce(r.cache_write_1h, 0), coalesce(r.output, 0), coalesce(r.reasoning, 0),
+    coalesce(r.requests, 0), coalesce(r.conversations, 0)
+  from jsonb_to_recordset(p_rows) as r(
+    ts timestamptz, source text, model text, granularity text,
+    input bigint, cache_read bigint, cache_write_5m bigint, cache_write_1h bigint,
+    output bigint, reasoning bigint, requests int, conversations int
+  )
+  on conflict (device_id, ts, source, model) do update set
+    granularity = excluded.granularity, input = excluded.input, cache_read = excluded.cache_read,
+    cache_write_5m = excluded.cache_write_5m, cache_write_1h = excluded.cache_write_1h,
+    output = excluded.output, reasoning = excluded.reasoning, requests = excluded.requests,
+    conversations = excluded.conversations;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+-- One impression per server render of a sponsored slot. Called fire-and-forget with the
+-- service role; exactness is not required.
+create or replace function public.record_sponsor_impression(p_sponsor uuid, p_placement text, p_count int default 1)
+returns void language sql volatile security definer set search_path = '' as $$
+  insert into public.sponsor_impressions (sponsor_id, day, placement, count)
+  values (p_sponsor, (now() at time zone 'utc')::date, p_placement, greatest(coalesce(p_count, 1), 1))
+  on conflict (sponsor_id, day, placement)
+  do update set count = public.sponsor_impressions.count + excluded.count
+$$;
+
 -- Housekeeping for /api/cron/refresh: an expired, never-collected code revokes the token it
 -- minted, and drops the device if nothing was ever pushed from it. Old rows are deleted.
 create or replace function public.cleanup_link_codes()
@@ -746,9 +874,13 @@ revoke execute on function public.cleanup_link_codes() from public, anon, authen
 revoke execute on function public.create_org(text, text, boolean) from public, anon;
 revoke execute on function public.join_org(text) from public, anon;
 revoke execute on function public.my_orgs() from public, anon;
+revoke execute on function public.replace_device_buckets(uuid, jsonb) from public, anon, authenticated;
+revoke execute on function public.record_sponsor_impression(uuid, text, int) from public, anon, authenticated;
 
 grant execute on function public.consume_link_code(text) to service_role;
 grant execute on function public.cleanup_link_codes() to service_role;
+grant execute on function public.replace_device_buckets(uuid, jsonb) to service_role;
+grant execute on function public.record_sponsor_impression(uuid, text, int) to service_role;
 grant execute on function public.create_org(text, text, boolean) to authenticated;
 grant execute on function public.join_org(text) to authenticated;
 grant execute on function public.my_orgs() to authenticated;

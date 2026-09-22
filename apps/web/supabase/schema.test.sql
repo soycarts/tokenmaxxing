@@ -247,5 +247,150 @@ begin
   end;
 end $$;
 
+-- ------------------------------------------------- v0.2: push granularity and replace
+do $$
+declare
+  dev uuid := (select dev_b from t_ids);
+  day0 timestamptz := date_trunc('day', now() at time zone 'utc') at time zone 'utc';
+  mon timestamptz := date_trunc('week', now() at time zone 'utc') at time zone 'utc';
+  n int;
+begin
+  if (select count(*) from public.buckets where granularity <> 'hour') <> 0 then
+    raise exception 'existing rows should default to hour';
+  end if;
+  begin
+    insert into public.buckets (user_id, device_id, ts, source, model, granularity)
+    select bob, dev_b, day0 + interval '1 hour', 'claude', 'x', 'day' from t_ids;
+    raise exception 'day rows must start at 00:00 UTC';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.buckets (user_id, device_id, ts, source, model, granularity)
+    select bob, dev_b, mon + interval '1 day', 'claude', 'x', 'week' from t_ids;
+    raise exception 'week rows must start on a Monday';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.buckets (user_id, device_id, ts, source, model, granularity)
+    select bob, dev_b, mon, 'claude', 'x', 'fortnight' from t_ids;
+    raise exception 'granularity must be hour, day or week';
+  exception when check_violation then null;
+  end;
+
+  -- bob had 3 hourly rows on dev_b; a replace leaves exactly the batch, all daily
+  n := public.replace_device_buckets(dev, jsonb_build_array(
+    jsonb_build_object('ts', day0, 'source', 'codex', 'model', 'tm-test-model', 'granularity', 'day',
+      'input', 1000000, 'cache_read', 0, 'cache_write_5m', 0, 'cache_write_1h', 0, 'output', 100000,
+      'reasoning', 0, 'requests', 3, 'conversations', 1),
+    jsonb_build_object('ts', day0 - interval '1 day', 'source', 'claude', 'model', 'tm-test-model', 'granularity', 'day',
+      'input', 0, 'cache_read', 0, 'cache_write_5m', 0, 'cache_write_1h', 0, 'output', 10000)
+  ));
+  if n <> 2 then raise exception 'replace_device_buckets wrote % rows, expected 2', n; end if;
+  if (select count(*) from public.buckets where device_id = dev) <> 2 then raise exception 'replace kept old rows'; end if;
+  if exists (select 1 from public.buckets where device_id = dev and granularity <> 'day') then raise exception 'replace granularity'; end if;
+  if exists (select 1 from public.buckets where device_id = dev and user_id <> (select bob from t_ids)) then
+    raise exception 'replace must take the user from the device';
+  end if;
+  if (select count(*) from public.buckets where device_id = (select dev_a from t_ids)) <> 2 then
+    raise exception 'replace touched another device';
+  end if;
+
+  -- an empty batch clears the device
+  if public.replace_device_buckets(dev, '[]'::jsonb) <> 0 then raise exception 'empty replace'; end if;
+  if exists (select 1 from public.buckets where device_id = dev) then raise exception 'empty replace kept rows'; end if;
+  perform public.replace_device_buckets(dev, jsonb_build_array(
+    jsonb_build_object('ts', mon, 'source', 'codex', 'model', 'tm-test-model', 'granularity', 'week',
+      'input', 1000000, 'cache_read', 0, 'cache_write_5m', 0, 'cache_write_1h', 0, 'output', 0)));
+
+  begin
+    perform public.replace_device_buckets('00000000-0000-4000-8000-0000000000ff', '[]'::jsonb);
+    raise exception 'unknown device should fail';
+  exception when no_data_found then null;
+  end;
+  begin
+    perform public.replace_device_buckets(dev, '{}'::jsonb);
+    raise exception 'non-array rows should fail';
+  exception when invalid_parameter_value then null;
+  end;
+
+  update public.devices set last_push_at = now() where id = dev;
+end $$;
+
+set local role anon;
+do $$
+begin
+  if public.profile_page('tm-test-bob', 'all') ->> 'granularity' <> 'week' then
+    raise exception 'profile granularity %, expected week', public.profile_page('tm-test-bob', 'all') ->> 'granularity';
+  end if;
+  if public.profile_page('tm-test-alice', 'all') ->> 'granularity' <> 'hour' then
+    raise exception 'alice never pushed coarse rows';
+  end if;
+  begin
+    perform public.replace_device_buckets((select dev_b from t_ids), '[]'::jsonb);
+    raise exception 'anon can call replace_device_buckets';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+-- ------------------------------------------------------------------ v0.2: sponsors
+insert into public.sponsors (slug, name, tagline, url, placements, starts_at, ends_at, active) values
+  ('tm-test-live', 'Live Co', 'Ships things', 'https://example.com', '{leaderboard:value,profile}', now() - interval '1 day', now() + interval '1 day', true),
+  ('tm-test-off', 'Off Co', '', 'https://example.com', '{leaderboard:value}', now() - interval '1 day', now() + interval '1 day', false),
+  ('tm-test-old', 'Old Co', '', 'https://example.com', '{leaderboard:value}', now() - interval '9 days', now() - interval '1 day', true);
+
+do $$
+begin
+  begin
+    insert into public.sponsors (slug, name, url, placements) values ('tm-test-bad', 'Bad', 'https://x.test', '{sidebar}');
+    raise exception 'placement check missing';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.sponsors (slug, name, url) values ('tm-test-http', 'Bad', 'http://x.test');
+    raise exception 'sponsor url must be https';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.sponsors (slug, name, url, tagline) values ('tm-test-long', 'Bad', 'https://x.test', repeat('x', 81));
+    raise exception 'tagline length check missing';
+  exception when check_violation then null;
+  end;
+  perform public.record_sponsor_impression((select id from public.sponsors where slug = 'tm-test-live'), 'leaderboard:value');
+  perform public.record_sponsor_impression((select id from public.sponsors where slug = 'tm-test-live'), 'leaderboard:value', 4);
+  if (select count from public.sponsor_impressions i join public.sponsors s on s.id = i.sponsor_id
+      where s.slug = 'tm-test-live' and i.placement = 'leaderboard:value') <> 5 then
+    raise exception 'impressions should add up to 5';
+  end if;
+end $$;
+
+set local role anon;
+do $$
+declare n int;
+begin
+  select count(*) into n from public.sponsors where slug like 'tm-test-%';
+  if n <> 1 then raise exception 'anon should see only the live sponsor, saw %', n; end if;
+  if not exists (select 1 from public.sponsors where slug = 'tm-test-live' and placements @> '{profile}') then
+    raise exception 'placement filter';
+  end if;
+  begin
+    insert into public.sponsors (slug, name, url) values ('tm-test-anon', 'Anon', 'https://x.test');
+    raise exception 'anon can insert sponsors';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.record_sponsor_impression((select id from public.sponsors where slug = 'tm-test-live'), 'profile');
+    raise exception 'anon can record impressions';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform count(*) from public.sponsor_impressions;
+    raise exception 'anon can read impressions';
+  exception when insufficient_privilege then null;
+  end;
+  if (select month_usd from public.site_stats()) is null then raise exception 'site_stats month_usd missing'; end if;
+end $$;
+reset role;
+
 select 'schema.test.sql: all assertions passed' as result;
 rollback;
