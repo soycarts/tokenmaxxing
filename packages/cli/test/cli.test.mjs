@@ -53,6 +53,15 @@ test('sync is incremental and appends replacement rows; the reader keeps the las
   const row = after.rows.get('2026-07-05T00:00:00Z|claude|claude-fable-5');
   assert.equal(row.input, 8668 + 100);
   assert.equal(row.requests, 6);
+
+  // Replacement across syncs: the same message later written with a larger usage replaces, not adds.
+  const bigger = { ...extra, timestamp: '2026-07-05T00:59:30.000Z', message: { ...extra.message, usage: { ...extra.message.usage, output_tokens: 900 } } };
+  writeFileSync(file, readFileSync(file, 'utf8') + JSON.stringify(bigger) + '\n');
+  assert.equal((await runCli(['sync', '--quiet'], ENV(home))).code, 0);
+  const replaced = readBuckets(home).rows.get('2026-07-05T00:00:00Z|claude|claude-fable-5');
+  assert.equal(replaced.input, 8668 + 100);
+  assert.equal(replaced.output, 3341 + 900);
+  assert.equal(replaced.requests, 6);
   assert.deepEqual(Object.keys(row), ['v', 'ts', 'source', 'model', 'input', 'cache_read', 'cache_write_5m', 'cache_write_1h', 'output', 'reasoning', 'requests', 'conversations']);
 });
 
@@ -105,7 +114,7 @@ test('verify: passes when ccusage agrees, fails outside 1%, explains when ccusag
   const nodeDir = process.execPath.replace(/\/node$/, '');
   fakeCcusage(bin, [
     { date: '2026-07-05', modelBreakdowns: [bd('claude-fable-5', 8668, 3341, 16422, 117941), bd('claude-opus-5-5', 10, 300, 1000, 2000), bd('<synthetic>', 0, 0, 0, 0)] },
-    { date: '2026-07-28', modelBreakdowns: [bd('claude-opus-5', 4, 6, 20800, 38888)] },
+    { date: '2026-07-28', modelBreakdowns: [bd('claude-opus-5', 4, 297, 20800, 38888)] },
   ]);
   const ok = await runCli(['verify', '--since', '2026-07-01'], ENV(home, { PATH: `${bin}:${nodeDir}:/usr/bin:/bin` }));
   assert.equal(ok.code, 0, ok.stdout + ok.stderr);

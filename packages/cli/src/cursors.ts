@@ -19,11 +19,16 @@ export interface FileCursor {
   count?: number;
 }
 
+/** [key, hour, model, input, cache_read, cache_write_5m, cache_write_1h, output] */
+export type RecentUsage = [string, string, string, number, number, number, number, number];
+
 export interface SourceCursor {
   files: Record<string, FileCursor>;
   dedup: string[];
   /** claude: user-prompt uuids already counted as conversations. */
   convDedup?: string[];
+  /** claude: contributions of the most recent dedup keys, so a later, larger line can replace them. */
+  recent?: RecentUsage[];
   badLines: number;
   lastSync?: string;
   lastFilesScanned?: number;

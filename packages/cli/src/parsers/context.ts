@@ -3,6 +3,8 @@ import type { SourceCursor } from '../cursors.js';
 import type { BoundedSet } from '../dedup.js';
 
 export const DEDUP_LIMIT = 200_000;
+/** Recent per-key contributions kept in cursors.json for cross-sync replacement. */
+export const RECENT_LIMIT = 10_000;
 
 export interface ParseStats {
   filesSeen: number;

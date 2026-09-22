@@ -22,10 +22,11 @@ async function run(ctx) {
 //   input 8660+2+2+2+2 = 8668; output 792+476+407+1227+439 = 3341
 //   cache_write_1h 5202+9465+1428+281+46 = 16422; cache_read 10540+15742+25207+32472+33980 = 117941
 // parent, hour 01, claude-opus-5-5: legacy usage (no cache_creation) → 5m = 1000
-// subagent, 2026-07-28T20, claude-opus-5: first-seen usage per id (out 1, not 292), dup of parent id skipped
+// subagent, 2026-07-28T20, claude-opus-5: largest usage per id — msg …pVbBuy streams output 1 → 1 → 292, so 292
+//   counts once (plus …hUgUTE out 5); the copy of the parent's …g7guNa line has an equal total and is skipped
 const FABLE = { input: 8668, output: 3341, cache_write_5m: 0, cache_write_1h: 16422, cache_read: 117941, requests: 5, conversations: 2 };
 const OPUS55 = { input: 10, output: 300, cache_write_5m: 1000, cache_write_1h: 0, cache_read: 2000, requests: 1, conversations: 1 };
-const SUB = { input: 4, output: 6, cache_write_5m: 11840 + 8960, cache_write_1h: 0, cache_read: 13524 + 25364, requests: 2, conversations: 0 };
+const SUB = { input: 4, output: 292 + 5, cache_write_5m: 11840 + 8960, cache_write_1h: 0, cache_read: 13524 + 25364, requests: 2, conversations: 0 };
 
 function pick(r) {
   const { input, output, cache_write_5m, cache_write_1h, cache_read, requests, conversations } = r;
@@ -127,4 +128,41 @@ test('claude: CLAUDE_CONFIG_DIR-style multiple roots are all scanned', async () 
   assert.equal(ctx.stats.filesSeen, 4);
   // identical message ids in both roots count once
   assert.deepEqual(pick(rows.get('2026-07-05T00:00:00Z|claude-fable-5')).input, FABLE.input);
+});
+
+test('claude: a message whose output grows 1 → 1 → 292 is counted once at 292', async () => {
+  const home = fakeHome({ codex: false, gemini: false });
+  const ctx = ctxFor(join(home, '.claude'));
+  const rows = await run(ctx);
+  const sub = rows.get('2026-07-28T20:00:00Z|claude-opus-5');
+  assert.equal(sub.output, 297); // 292 (pVbBuy, final line) + 5 (hUgUTE)
+  assert.equal(sub.requests, 2);
+  assert.equal(sub.cache_write_5m, 11840 + 8960); // input/cache fields are identical on every line, counted once
+});
+
+test('claude: a message split across two syncs is replaced, not added (and the winning line picks the hour)', async () => {
+  const home = fakeHome({ codex: false, gemini: false });
+  const root = join(home, '.claude');
+  const file = join(root, 'projects', '-placeholder-project', 'session.jsonl');
+  const line = (out, ts) => JSON.stringify({
+    type: 'assistant', requestId: 'req_fx_split', timestamp: ts,
+    message: { model: 'claude-fable-5', id: 'msg_fx_split', usage: { input_tokens: 3, output_tokens: out, cache_read_input_tokens: 100, cache_creation_input_tokens: 0 } },
+  }) + '\n';
+  const ctx1 = ctxFor(root);
+  await run(ctx1);
+  appendFileSync(file, line(1, '2026-07-05T04:59:59.000Z'));
+  const ctx2 = ctxFor(root, JSON.parse(JSON.stringify(ctx1.cursor)));
+  const r2 = await run(ctx2);
+  assert.equal(r2.get('2026-07-05T04:00:00Z|claude-fable-5').output, 1);
+  appendFileSync(file, line(1, '2026-07-05T05:00:00.500Z') + line(292, '2026-07-05T05:00:01.000Z'));
+  const ctx3 = ctxFor(root, JSON.parse(JSON.stringify(ctx2.cursor)));
+  const r3 = await run(ctx3);
+  // earlier contribution subtracted from hour 04, winner added to hour 05
+  assert.deepEqual(pick(r3.get('2026-07-05T04:00:00Z|claude-fable-5')), { input: -3, output: -1, cache_write_5m: 0, cache_write_1h: 0, cache_read: -100, requests: -1, conversations: 0 });
+  assert.deepEqual(pick(r3.get('2026-07-05T05:00:00Z|claude-fable-5')), { input: 3, output: 292, cache_write_5m: 0, cache_write_1h: 0, cache_read: 100, requests: 1, conversations: 0 });
+  assert.ok(ctx3.cursor.recent.some((r) => r[0] === 'msg_fx_split:req_fx_split' && r[7] === 292));
+  // a smaller repeat later changes nothing
+  appendFileSync(file, line(50, '2026-07-05T06:00:00.000Z'));
+  const ctx4 = ctxFor(root, JSON.parse(JSON.stringify(ctx3.cursor)));
+  assert.equal((await run(ctx4)).size, 0);
 });

@@ -5,8 +5,8 @@ import { hourOf } from '../bucket.js';
 import { isFile, walkFiles } from '../fsutil.js';
 import { has, parseLine, scanLines } from '../lines.js';
 import type { Bucket, Usage } from '../types.js';
-import type { FileCursor } from '../cursors.js';
-import { DEDUP_LIMIT, num, type ParseContext } from './context.js';
+import type { FileCursor, RecentUsage } from '../cursors.js';
+import { DEDUP_LIMIT, RECENT_LIMIT, num, type ParseContext } from './context.js';
 
 const USAGE = Buffer.from('"usage"');
 const USER = Buffer.from('"type":"user"');
@@ -49,6 +49,36 @@ export function claudeUsage(u: any): Usage | null {
   return { input, cache_read: cacheRead, cache_write_5m: w5, cache_write_1h: w1, output, reasoning: 0 };
 }
 
+interface Contribution {
+  hour: string;
+  model: string;
+  usage: Usage;
+  total: number;
+}
+
+const totalOf = (u: Usage) => u.input + u.cache_read + u.cache_write_5m + u.cache_write_1h + u.output;
+const negate = (u: Usage): Usage => ({
+  input: -u.input, cache_read: -u.cache_read, cache_write_5m: -u.cache_write_5m,
+  cache_write_1h: -u.cache_write_1h, output: -u.output, reasoning: -u.reasoning,
+});
+
+function loadRecent(rows: RecentUsage[] | undefined): Map<string, Contribution> {
+  const m = new Map<string, Contribution>();
+  for (const r of rows ?? []) {
+    if (!Array.isArray(r) || r.length < 8) continue;
+    const usage: Usage = { input: r[3], cache_read: r[4], cache_write_5m: r[5], cache_write_1h: r[6], output: r[7], reasoning: 0 };
+    m.set(r[0], { hour: r[1], model: r[2], usage, total: totalOf(usage) });
+  }
+  return m;
+}
+
+function saveRecent(m: Map<string, Contribution>): RecentUsage[] {
+  const all = [...m.entries()];
+  return all.slice(Math.max(0, all.length - RECENT_LIMIT)).map(([k, c]) => [
+    k, c.hour, c.model, c.usage.input, c.usage.cache_read, c.usage.cache_write_5m, c.usage.cache_write_1h, c.usage.output,
+  ]);
+}
+
 function isPrompt(content: unknown): boolean {
   if (typeof content === 'string') return true;
   return Array.isArray(content) && content.some((b) => b && typeof b === 'object' && (b as any).type === 'text');
@@ -57,6 +87,8 @@ function isPrompt(content: unknown): boolean {
 export async function parse(ctx: ParseContext): Promise<Bucket[]> {
   const { cursor, dedup, acc, stats } = ctx;
   const conv = new BoundedSet(DEDUP_LIMIT, cursor.convDedup ?? []);
+  // Per-key contributions: every key seen this run, plus the most recent keys from earlier syncs.
+  const contribs = loadRecent(cursor.recent);
   const list = await claudeFiles(ctx.paths);
   const live = new Set(list);
 
@@ -96,8 +128,29 @@ export async function parse(ctx: ParseContext): Promise<Bucket[]> {
           stats.badLines++;
           return;
         }
-        if (typeof m.id === 'string' && m.id) {
-          if (!dedup.add(`${m.id}:${obj.requestId ?? ''}`)) return;
+        if (typeof m.id !== 'string' || !m.id) {
+          acc.addUsage(hour, 'claude', model, usage);
+          return;
+        }
+        // One message is written as several lines whose usage is cumulative: keep the largest.
+        const key = `${m.id}:${obj.requestId ?? ''}`;
+        const total = totalOf(usage);
+        const prevC = contribs.get(key);
+        if (prevC) {
+          if (total <= prevC.total) return;
+          acc.addUsage(prevC.hour, 'claude', prevC.model, negate(prevC.usage), -1);
+          contribs.delete(key);
+        } else if (dedup.has(key)) {
+          return; // seen long ago; its contribution is no longer kept, so it cannot be replaced
+        }
+        dedup.add(key);
+        contribs.set(key, { hour, model, usage, total });
+        if (contribs.size > DEDUP_LIMIT * 1.25) {
+          let excess = contribs.size - DEDUP_LIMIT;
+          for (const k of contribs.keys()) {
+            if (excess-- <= 0) break;
+            contribs.delete(k);
+          }
         }
         acc.addUsage(hour, 'claude', model, usage);
       } else if (obj.type === 'user' && !isSub) {
@@ -144,5 +197,6 @@ export async function parse(ctx: ParseContext): Promise<Bucket[]> {
 
   for (const f of Object.keys(cursor.files)) if (!live.has(f) && !isFile(f)) delete cursor.files[f];
   cursor.convDedup = conv.toJSON();
+  cursor.recent = saveRecent(contribs);
   return acc.rows();
 }

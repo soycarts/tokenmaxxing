@@ -10,7 +10,7 @@ import * as claude from './parsers/claude.js';
 import * as codex from './parsers/codex.js';
 import * as gemini from './parsers/gemini.js';
 import * as cursor from './parsers/cursor.js';
-import type { Bucket, SourceName } from './types.js';
+import { COUNT_FIELDS, type Bucket, type SourceName } from './types.js';
 
 export const PARSERS: Record<SourceName, (ctx: ParseContext) => Promise<Bucket[]>> = {
   claude: claude.parse,
@@ -98,6 +98,8 @@ export async function sync(cfg: Config = loadConfig(), onProgress?: (msg: string
       for (const [k, d] of deltas) {
         const next = { ...(existing.rows.get(k) ?? emptyBucket(d.ts, d.source, d.model)) };
         addInto(next, d);
+        // A replaced Claude contribution is subtracted; never let a row go negative if the stores disagree.
+        for (const f of COUNT_FIELDS) if (next[f] < 0) next[f] = 0;
         existing.rows.set(k, next);
         out.push(next);
       }
