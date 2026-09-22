@@ -83,4 +83,4 @@ The workflows in `.github/workflows/` (`ci.yml`, `pricing.yml`, `pricing-apply.y
 
 3. **Optional `PRICING_PR_TOKEN`**: PRs opened with the default token do not trigger `ci.yml`. The pricing workflow posts its own `pricing / tests` status either way. For full CI on `pricing/auto` PRs, add a fine-grained PAT scoped to this repo (Contents: read and write, Pull requests: read and write) as `PRICING_PR_TOKEN`.
 
-Check it works: Actions → pricing → Run workflow. The run should end with "Pricing snapshots are up to date; no PR" or open a `pricing: snapshot YYYY-MM-DD` PR. After the first push to main that touches `seed_prices.sql`, Actions → pricing-apply should show `seed_prices.sql → HTTP 201` and the row count in the job summary.
+Check it works: Actions → pricing → Run workflow. The run should end with "Pricing snapshots are up to date; no PR" or open a `pricing: snapshot YYYY-MM-DD` PR. After the first push to main that touches `seed_prices.sql`, Actions → pricing-apply should show `seed_prices.sql → HTTP 2xx` and the row count in the job summary.
