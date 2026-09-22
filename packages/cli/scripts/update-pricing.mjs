@@ -20,8 +20,11 @@ import { join } from 'node:path';
 
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const MODELSDEV_URL = 'https://models.dev/api.json';
+// Not vertex_ai-anthropic_models: Vertex ids (`claude-x@date`) already normalise to the first-party
+// Anthropic key, and several Vertex entries lack cache rates, so as the shortest id sharing a normalised
+// key they would win the alias and price cache reads at the input rate (10x) for retired models.
 const PROVIDERS = new Set([
-  'anthropic', 'openai', 'text-completion-openai', 'gemini', 'vertex_ai-language-models', 'vertex_ai-anthropic_models',
+  'anthropic', 'openai', 'text-completion-openai', 'gemini', 'vertex_ai-language-models',
   'bedrock', 'bedrock_converse', 'deepseek',
 ]);
 const META = new Set(['litellm_provider', 'mode', 'max_input_tokens', 'max_output_tokens', 'deprecation_date', 'retained_since']);

@@ -12,8 +12,10 @@
 //
 // Rates are resolved with the CLI's exact-key precedence (overrides → LiteLLM → models.dev, same field
 // mapping as src/pricing/index.ts) and shown in USD per million tokens. Only ids the parsers can emit are
-// compared: un-prefixed anthropic/openai/google ids (claude-*, gpt-*, chatgpt-*, codex-*, o1..o9*, gemini-*).
-// Ids that share a canonical form and an identical change are collapsed into one row.
+// compared: un-prefixed anthropic/openai/google ids (claude-*, gpt-*, chatgpt-*, codex-*, o1..o9*, gemini-*),
+// plus the normalised alias rows that price dated/prefixed ids (source "alias of <id>"), since a change in
+// which entry wins an alias changes what users pay just as a rate change does. Ids that share a canonical
+// form and an identical change are collapsed into one row.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve as resolvePath } from 'node:path';
@@ -129,18 +131,26 @@ function canon(model) {
     .replace(/(\d)\.(\d)/g, '$1-$2');
 }
 
-/** Map id → { rates, source } for every parser-emittable id priced in this set. */
+/**
+ * Map id → { rates, source } for every parser-emittable id priced in this set: exact ids first, then the
+ * normalised alias of any priced id (shortest source id wins, as in the CLI's fuzzy step and the site's
+ * model_key lookup) when that alias is itself a parser-emittable id with no exact entry.
+ */
 function priceTable(set) {
   const litellm = parse(set['litellm.snapshot.json']);
   const modelsdev = parse(set['modelsdev.snapshot.json']);
   const overrides = parse(set['overrides.json']);
   const ids = new Set([...Object.keys(overrides), ...Object.keys(litellm)]);
   for (const block of Object.values(modelsdev)) for (const id of Object.keys(block?.models ?? {})) ids.add(id);
-  const out = new Map();
+  ids.delete('sample_spec');
+  const pinned = new Set();
+  const exact = new Map();
   for (const id of ids) {
-    if (!FAMILY.test(id)) continue;
     const ov = overrides[id];
-    if (ov && typeof ov.unpriced === 'string') continue; // pinned unpriced
+    if (ov && typeof ov.unpriced === 'string') {
+      pinned.add(id).add(canon(id));
+      continue;
+    }
     let rates = fromOverride(ov);
     let source = 'override';
     if (!rates) [rates, source] = [fromLitellm(litellm[id]), 'litellm'];
@@ -153,7 +163,14 @@ function priceTable(set) {
         }
       }
     }
-    if (rates) out.set(id, { rates, source });
+    if (rates) exact.set(id, { rates, source });
+  }
+  const out = new Map([...exact].filter(([id]) => FAMILY.test(id)));
+  const bySize = [...exact.keys()].sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
+  for (const id of bySize) {
+    const key = canon(id);
+    if (exact.has(key) || out.has(key) || pinned.has(key) || !FAMILY.test(key)) continue;
+    out.set(key, { rates: exact.get(id).rates, source: `alias of ${id}` });
   }
   return out;
 }
