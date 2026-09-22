@@ -4,6 +4,9 @@
   "workspaces": ["packages/*", "apps/*"],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "pricing:refresh": "node packages/cli/scripts/update-pricing.mjs && node apps/web/scripts/seed-prices.mjs",
+    "pricing:check": "node packages/cli/scripts/update-pricing.mjs --check; u=$?; node apps/web/scripts/seed-prices.mjs --check; s=$?; [ $u -eq 0 ] && [ $s -eq 0 ]",
+    "pricing:diff": "node packages/cli/scripts/pricing-diff.mjs"
   }
 }

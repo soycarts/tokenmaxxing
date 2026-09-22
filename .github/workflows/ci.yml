@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  # Non-blocking: warns when upstream LiteLLM/models.dev prices differ from the bundled snapshots or the
+  # seed SQL is stale. The daily pricing workflow (pricing.yml) is what actually refreshes them.
+  pricing-freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm run pricing:check
+        id: check
+        run: npm run pricing:check
+      - name: Annotate stale snapshots
+        if: failure() && steps.check.outcome == 'failure'
+        run: |
+          echo "::warning title=Pricing snapshots are stale::Upstream LiteLLM/models.dev prices differ from packages/cli/src/pricing, or apps/web/supabase/seed_prices.sql is out of date. Run 'npm run pricing:refresh' (then 'npm run pricing:diff') or merge the open pricing/auto PR. See docs/PRICING.md."
+          exit 1
