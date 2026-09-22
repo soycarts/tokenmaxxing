@@ -114,11 +114,14 @@ test('verify: passes when ccusage agrees, fails outside 1%, explains when ccusag
   const nodeDir = process.execPath.replace(/\/node$/, '');
   fakeCcusage(bin, [
     { date: '2026-07-05', modelBreakdowns: [bd('claude-fable-5', 8668, 3341, 16422, 117941), bd('claude-opus-5-5', 10, 300, 1000, 2000), bd('<synthetic>', 0, 0, 0, 0)] },
-    { date: '2026-07-28', modelBreakdowns: [bd('claude-opus-5', 4, 297, 20800, 38888)] },
+    { date: '2026-07-28', modelBreakdowns: [bd('claude-opus-5', 4, 6, 20800, 38888)] },
   ]);
   const ok = await runCli(['verify', '--since', '2026-07-01'], ENV(home, { PATH: `${bin}:${nodeDir}:/usr/bin:/bin` }));
   assert.equal(ok.code, 0, ok.stdout + ok.stderr);
-  assert.match(ok.stdout, /PASS — every token metric within 1% of ccusage/);
+  // ccusage keeps the first streamed line (output 1 instead of 292): output differs but is informational.
+  assert.match(ok.stdout, /PASS — input, cache_write and cache_read within 1% of ccusage/);
+  assert.match(ok.stdout, /claude-opus-5 .*\n\s+output\s+297\s+6\s+\+4850\.00%\s+\(info\)/);
+  assert.match(ok.stdout, /Output \+[\d.]+% vs ccusage \(informational, not part of pass\/fail\): expected higher than ccusage: tokenmaxxing counts the final usage of multi-line messages\./);
   assert.match(ok.stdout, /ccusage prices every cache write at the 5-minute rate/);
 
   fakeCcusage(bin, [{ date: '2026-07-05', modelBreakdowns: [bd('claude-fable-5', 8668, 3341, 16422, 150000)] }]);

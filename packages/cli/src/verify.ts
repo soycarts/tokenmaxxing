@@ -7,6 +7,9 @@ import type { Bucket } from './types.js';
 export const TOLERANCE = 0.01;
 const METRICS = ['input', 'output', 'cache_write', 'cache_read'] as const;
 type Metric = (typeof METRICS)[number];
+/** Output is informational: ccusage keeps the first line of a multi-line message, we keep the final usage. */
+const STRICT: readonly Metric[] = ['input', 'cache_write', 'cache_read'];
+export const OUTPUT_NOTE = 'expected higher than ccusage: tokenmaxxing counts the final usage of multi-line messages';
 type Totals = Record<Metric, number> & { cost: number };
 
 const zero = (): Totals => ({ input: 0, output: 0, cache_write: 0, cache_read: 0, cost: 0 });
@@ -66,18 +69,20 @@ export function compare(ours: Map<string, Totals>, theirs: Map<string, Totals>):
   const tTheirs = zero();
   let pass = true;
   const failed: string[] = [];
+  const status = (k: Metric, d: number, label: string): string => {
+    if (!STRICT.includes(k)) return '(info)';
+    if (Math.abs(d) <= TOLERANCE) return 'ok';
+    pass = false;
+    failed.push(label);
+    return 'FAIL';
+  };
   for (const model of models) {
     const a = ours.get(model) ?? zero();
     const b = theirs.get(model) ?? zero();
     if (METRICS.every((k) => a[k] === 0 && b[k] === 0)) continue;
     METRICS.forEach((k, i) => {
       const d = delta(a[k], b[k]);
-      const ok = Math.abs(d) <= TOLERANCE;
-      if (!ok) {
-        pass = false;
-        failed.push(`${model} ${k}`);
-      }
-      rows.push([i === 0 ? model : '', k, fmtInt(a[k]), fmtInt(b[k]), fmtPct(d), ok ? 'ok' : 'FAIL']);
+      rows.push([i === 0 ? model : '', k, fmtInt(a[k]), fmtInt(b[k]), fmtPct(d), status(k, d, `${model} ${k}`)]);
     });
     rows.push(['', 'cost', fmtUsd(a.cost), fmtUsd(b.cost), fmtPct(delta(a.cost, b.cost)), '(info)']);
     for (const k of [...METRICS, 'cost'] as const) {
@@ -87,21 +92,18 @@ export function compare(ours: Map<string, Totals>, theirs: Map<string, Totals>):
   }
   METRICS.forEach((k, i) => {
     const d = delta(tOurs[k], tTheirs[k]);
-    const ok = Math.abs(d) <= TOLERANCE;
-    if (!ok) {
-      pass = false;
-      failed.push(`TOTAL ${k}`);
-    }
-    rows.push([i === 0 ? 'TOTAL' : '', k, fmtInt(tOurs[k]), fmtInt(tTheirs[k]), fmtPct(d), ok ? 'ok' : 'FAIL']);
+    rows.push([i === 0 ? 'TOTAL' : '', k, fmtInt(tOurs[k]), fmtInt(tTheirs[k]), fmtPct(d), status(k, d, `TOTAL ${k}`)]);
   });
   rows.push(['', 'cost', fmtUsd(tOurs.cost), fmtUsd(tTheirs.cost), fmtPct(delta(tOurs.cost, tTheirs.cost)), '(info)']);
   const lines = table(['MODEL', 'METRIC', 'TOKENMAXXING', 'CCUSAGE', 'DELTA', ''], rows, ['l', 'l', 'r', 'r', 'r', 'l']);
   lines.push('');
   lines.push(
     pass
-      ? `PASS — every token metric within ${TOLERANCE * 100}% of ccusage.`
+      ? `PASS — input, cache_write and cache_read within ${TOLERANCE * 100}% of ccusage.`
       : `FAIL — outside ${TOLERANCE * 100}% tolerance: ${failed.join(', ')}`,
   );
+  const outDelta = delta(tOurs.output, tTheirs.output);
+  lines.push(`Output ${fmtPct(outDelta)} vs ccusage (informational, not part of pass/fail): ${OUTPUT_NOTE}.`);
   lines.push(
     'Cost is informational and differs by design: ccusage prices every cache write at the 5-minute rate, while tokenmaxxing',
     'prices 1-hour cache writes at the 1-hour rate, and uses the bundled pricing snapshot instead of live prices.',

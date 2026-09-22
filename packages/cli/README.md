@@ -70,7 +70,9 @@ ROI = API-equivalent cost for the period ÷ (plan price × days ÷ 30.4375).
 Notes:
 
 - Cursor is detected but excluded from totals: its local database has no token counts.
-- `verify` groups by local calendar day because that is how `ccusage` groups. Costs differ from ccusage
+- `verify` groups by local calendar day because that is how `ccusage` groups. It checks input and cache tokens
+  at 1%; output is informational and expected higher, because ccusage counts only the first line of a message
+  that Claude Code writes as several lines, while tokenmaxxing counts its final usage. Costs differ from ccusage
   by design: ccusage prices every cache write at the 5-minute rate; tokenmaxxing prices 1-hour cache
   writes at the 1-hour rate.
 - `--site` (or `TOKENMAXXING_SITE`) points `link`/`push` at another server, e.g. `http://localhost:3000`.
