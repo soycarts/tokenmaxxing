@@ -28,7 +28,7 @@ Usage: tokenmaxxing <command> [options]
   plan list
   verify [--since 30d]               compare Claude totals with ccusage (if installed)
   link [--site URL]                  connect this machine to tokenmaxxing.fyi
-  push [--site URL] [--dry-run]      upload bucket rows (opt-in); prints what is sent
+  push [--site URL] [--dry-run] [--all]  upload bucket rows (opt-in); prints what is sent; --all resends everything
   hook install|uninstall|status [--yes]      opt-in Claude Code Stop / Codex notify hook
   schedule install|uninstall|status [--yes]  run sync every 30 min (launchd / cron)
   doctor                             paths, files scanned, cursor state, pricing snapshot
@@ -187,7 +187,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'push': {
       const cfg = ensureConfig(true);
-      await push(cfg, { site: str(a.flags.site), dryRun: !!a.flags['dry-run'] });
+      await push(cfg, { site: str(a.flags.site), dryRun: !!a.flags['dry-run'], all: !!a.flags.all });
       return 0;
     }
     case 'hook':

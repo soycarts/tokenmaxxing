@@ -93,6 +93,8 @@ export function planPush(all: Iterable<Bucket>, lastPushedTs?: string): PushPlan
 }
 
 export interface PushOptions {
+  /** Resend every row, ignoring the high-water mark. */
+  all?: boolean;
   site?: string;
   dryRun?: boolean;
   log?: (s: string) => void;
@@ -105,7 +107,8 @@ export async function push(cfg: Config, opts: PushOptions = {}): Promise<number>
     throw new SiteError('Not linked. Run `tokenmaxxing link` first.');
   }
   const { rows } = await loadBuckets();
-  const plan = planPush(rows.values(), cfg.site.lastPushedTs);
+  const plan = planPush(rows.values(), opts.all ? undefined : cfg.site.lastPushedTs);
+  let earliestRejected: string | undefined;
   if (!plan.rows.length) {
     log('Nothing to push.');
     return 0;
@@ -142,16 +145,23 @@ export async function push(cfg: Config, opts: PushOptions = {}): Promise<number>
     } catch {
       /* no body */
     }
-    const rejected: unknown[] = Array.isArray(body?.rejected) ? body.rejected : [];
+    const rejected: Array<{ index?: number }> = Array.isArray(body?.rejected) ? body.rejected : [];
     if (rejected.length) {
       log(`Site rejected ${rejected.length} of ${batch.length} rows in this batch (kept the rest):`);
       for (const r of rejected.slice(0, 5)) log(`  ${JSON.stringify(r)}`);
       if (rejected.length > 5) log(`  …and ${rejected.length - 5} more`);
+      for (const r of rejected) {
+        const row = typeof r.index === 'number' ? batch[r.index] : undefined;
+        if (row && (!earliestRejected || row.ts < earliestRejected)) earliestRejected = row.ts;
+      }
     }
     sent += batch.length - rejected.length;
-    cfg.site.lastPushedTs = batch.at(-1)!.ts;
+    // Never advance the high-water mark past a rejected hour, so the next push retries it.
+    const mark = batch.at(-1)!.ts;
+    cfg.site.lastPushedTs = earliestRejected && earliestRejected < mark ? earliestRejected : mark;
     saveConfig(cfg);
   }
+  if (earliestRejected) log(`Some rows were rejected; the next push retries from ${earliestRejected}. Run \`tokenmaxxing push --all\` to resend everything.`);
   log(`Pushed ${sent} rows.`);
   return sent;
 }
