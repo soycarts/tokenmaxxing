@@ -1,0 +1,38 @@
+{
+  "name": "tokenmaxxing-cli",
+  "version": "0.1.0",
+  "description": "See how much API-equivalent value your AI coding subscriptions deliver. Reads local Claude Code / Codex / Gemini CLI logs only. Zero dependencies, no telemetry.",
+  "type": "module",
+  "bin": {
+    "tokenmaxxing": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json && node scripts/copy-assets.mjs",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.mjs",
+    "update-pricing": "node scripts/update-pricing.mjs",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "tokens",
+    "usage",
+    "cost",
+    "roi"
+  ],
+  "homepage": "https://tokenmaxxing.fyi",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "typescript": "^7.0.2"
+  }
+}
