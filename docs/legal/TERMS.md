@@ -1,6 +1,6 @@
 # Terms of use
 
-**Draft for legal review. Not yet in force.** Effective date: to be set at launch. Operator: Bountify, Inc. ("we"). Contact: legal@tokenmaxxing.fyi (to be created).
+Effective 22 September 2026. Operator: Bountify, Inc. ("we"). Contact: legal@tokenmaxxing.fyi.
 
 ## 1. What this covers
 
@@ -48,7 +48,7 @@ You can delete your account at any time from the Account page. We can suspend or
 
 ## 12. Governing law
 
-Placeholder for legal review: governing law and venue to be set to Bountify, Inc.'s state of incorporation.
+These terms are governed by the laws of the State of Delaware, USA, without regard to its conflict-of-law rules, and any dispute will be brought in the state or federal courts located in Delaware.
 
 ## 13. Contact
 

@@ -2,7 +2,7 @@ import { Markdown } from "@/components/markdown";
 import type { LegalDoc } from "@/lib/content";
 import { parseMarkdown } from "@/lib/markdown";
 
-/** /privacy and /terms: the repo's docs/legal text, with a draft banner until an effective date is set. */
+/** /privacy and /terms: the repo's docs/legal text, dated by its own first line. */
 export function LegalPage({ doc }: { doc: LegalDoc }) {
   const blocks = parseMarkdown(doc.body);
   const sections = blocks.filter((b) => b.t === "h" && b.level === 2) as Extract<(typeof blocks)[number], { t: "h" }>[];
@@ -10,13 +10,7 @@ export function LegalPage({ doc }: { doc: LegalDoc }) {
   return (
     <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 md:pt-16">
       <h1 className="display max-w-[14ch] text-[3.2rem] sm:text-7xl lg:text-[5.5rem]">{doc.title}</h1>
-      {doc.status.draft ? (
-        <p role="note" className="mt-6 inline-flex -rotate-1 rounded-xl border-[2.5px] border-edge bg-gold px-4 py-2.5 font-semibold text-on-gold shadow-[4px_4px_0_var(--edge)]">
-          Draft for legal review. Not yet in force.
-        </p>
-      ) : (
-        <p className="mt-5 text-lg text-ink-2">Effective {doc.status.effective}</p>
-      )}
+      {doc.effective && <p className="mt-5 text-lg text-ink-2">Effective {doc.effective}</p>}
 
       <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,68ch)_minmax(0,1fr)]">
         <article className="min-w-0">

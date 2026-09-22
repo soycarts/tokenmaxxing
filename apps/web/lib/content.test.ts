@@ -25,26 +25,20 @@ describe("content/", () => {
 });
 
 describe("legalDoc", () => {
-  it("strips the H1 and the draft sentence while the date is unset", () => {
-    const d = legalDoc("PRIVACY.md", "");
+  it("strips the H1 and reads the effective date from the document", () => {
+    const d = legalDoc("PRIVACY.md");
     expect(d.title).toBe("Privacy policy");
-    expect(d.status).toEqual({ draft: true });
-    expect(d.body).not.toContain("Draft for legal review");
+    expect(d.effective).toBe("22 September 2026");
+    expect(d.body).not.toContain("# Privacy policy");
     expect(d.body).toContain("Controller: Bountify, Inc.");
-    expect(d.markdown).toContain("Draft for legal review");
-  });
-
-  it("prints the effective date once LEGAL_EFFECTIVE_DATE is set", () => {
-    const d = legalDoc("TERMS.md", "2026-10-01");
-    expect(d.status).toEqual({ draft: false, effective: "1 October 2026" });
-    expect(d.markdown).toContain("Effective 1 October 2026.");
-    expect(d.markdown).not.toContain("Draft for legal review");
-    expect(legalEffectiveDate("launch day")).toBe("launch day");
-    expect(legalEffectiveDate(" ")).toBeNull();
+    expect(d.body).not.toContain("Draft for legal review");
+    expect(d.body).not.toContain("to be created");
+    expect(legalDoc("TERMS.md").effective).toBe("22 September 2026");
+    expect(legalEffectiveDate("no date here")).toBeNull();
   });
 
   it("has the section the account page links to", () => {
-    const ids = parseMarkdown(legalDoc("PRIVACY.md", "").body).flatMap((b) => (b.t === "h" ? [b.id] : []));
+    const ids = parseMarkdown(legalDoc("PRIVACY.md").body).flatMap((b) => (b.t === "h" ? [b.id] : []));
     expect(ids).toContain("retention-and-deletion");
     expect(ids).toContain("sponsors");
   });

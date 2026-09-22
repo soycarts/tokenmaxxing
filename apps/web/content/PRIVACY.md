@@ -1,6 +1,6 @@
 # Privacy policy
 
-**Draft for legal review. Not yet in force.** Effective date: to be set at launch. Controller: Bountify, Inc. Contact: privacy@tokenmaxxing.fyi (to be created).
+Effective 22 September 2026. Controller: Bountify, Inc. Contact: privacy@tokenmaxxing.fyi.
 
 ## The short version
 

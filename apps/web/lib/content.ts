@@ -25,41 +25,29 @@ export function readContent(name: ContentName): string {
   return text;
 }
 
-const DRAFT_RE = /\*\*Draft for legal review\. Not yet in force\.\*\*\s*Effective date: to be set at launch\.\s*/;
+/** The document's own status line: "Effective 22 September 2026. Controller: …". */
+const EFFECTIVE_RE = /^Effective ([^.]+)\.\s*/m;
 
-/** "Effective 1 October 2026" once LEGAL_EFFECTIVE_DATE is set, else null (the draft banner shows). */
-export function legalEffectiveDate(raw = process.env.LEGAL_EFFECTIVE_DATE): string | null {
-  const v = raw?.trim();
-  if (!v) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-    const d = new Date(`${v}T00:00:00Z`);
-    if (!Number.isNaN(d.getTime())) {
-      return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-    }
-  }
-  return v;
+/** The effective date printed in the document, or null if the document has none. */
+export function legalEffectiveDate(src: string): string | null {
+  const m = EFFECTIVE_RE.exec(src);
+  return m ? m[1].trim() : null;
 }
 
 export type LegalDoc = {
   title: string;
-  /** The status line the page prints in its banner. */
-  status: { draft: true } | { draft: false; effective: string };
-  /** The document without its H1 and without the draft sentence (the banner carries it). */
+  /** "22 September 2026", from the document's own first line; the page prints it under the title. */
+  effective: string | null;
+  /** The document without its H1 (the status line stays in the body, under the printed date). */
   body: string;
-  /** The document as markdown for agents: the draft sentence or the effective date, in place. */
+  /** The document as markdown for agents, verbatim. */
   markdown: string;
 };
 
-export function legalDoc(name: "PRIVACY.md" | "TERMS.md", effectiveRaw?: string): LegalDoc {
+export function legalDoc(name: "PRIVACY.md" | "TERMS.md"): LegalDoc {
   const src = readContent(name);
-  const effective = legalEffectiveDate(effectiveRaw ?? process.env.LEGAL_EFFECTIVE_DATE);
   const h1 = /^#\s+(.+)\n+/.exec(src);
   const title = h1 ? h1[1].trim() : name.replace(/\.md$/, "");
   const rest = h1 ? src.slice(h1[0].length) : src;
-  return {
-    title,
-    status: effective ? { draft: false, effective } : { draft: true },
-    body: rest.replace(DRAFT_RE, ""),
-    markdown: effective ? src.replace(DRAFT_RE, `Effective ${effective}. `) : src,
-  };
+  return { title, effective: legalEffectiveDate(src), body: rest, markdown: src };
 }
