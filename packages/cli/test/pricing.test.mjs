@@ -106,6 +106,24 @@ test('bundled overrides pin codex-auto-review and gpt-reserve as unpriced with a
   assert.equal(unpricedNote('codex-auto-review'), 'bundled reviewer, no list price');
   assert.equal(unpricedNote('gpt-reserve'), 'bundled with Codex, no list price');
   assert.equal(unpricedNote('gpt-6-astra'), undefined);
+});
+
+test('overrides.json: every entry is an unpriced pin or a cited vendor price (never an invented one)', async () => {
   const ov = JSON.parse((await import('node:fs')).readFileSync(new URL('../src/pricing/overrides.json', import.meta.url), 'utf8'));
-  for (const e of Object.values(ov)) assert.deepEqual(Object.keys(e), ['unpriced']);
+  for (const [model, e] of Object.entries(ov)) {
+    if ('unpriced' in e) {
+      assert.deepEqual(Object.keys(e), ['unpriced'], model);
+      assert.equal(typeof e.unpriced, 'string', model);
+      continue;
+    }
+    assert.ok(typeof e.input === 'number' && typeof e.output === 'number', `${model}: input and output (USD per million) are required`);
+    assert.match(e.source ?? '', /^https:\/\/\S+$/, `${model}: source must be the vendor's https pricing page or announcement`);
+    assert.match(e.added ?? '', /^\d{4}-\d{2}-\d{2}$/, `${model}: added must be YYYY-MM-DD`);
+    const allowed = ['input', 'output', 'cache_read', 'cache_write_5m', 'cache_write_1h', 'source', 'added'];
+    for (const k of Object.keys(e)) assert.ok(allowed.includes(k), `${model}: unknown field ${k}`);
+    for (const k of ['input', 'output', 'cache_read', 'cache_write_5m', 'cache_write_1h']) {
+      if (k in e) assert.ok(typeof e[k] === 'number' && e[k] >= 0, `${model}: ${k} must be a non-negative number`);
+    }
+    assert.ok(resolve(model), `${model}: override does not resolve`);
+  }
 });

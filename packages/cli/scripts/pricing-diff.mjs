@@ -175,6 +175,21 @@ function priceTable(set) {
   return out;
 }
 
+/** Priced overrides in this set, each with what LiteLLM/models.dev alone would charge for the same id. */
+function overrideStatus(set) {
+  const litellm = parse(set['litellm.snapshot.json']);
+  const modelsdev = parse(set['modelsdev.snapshot.json']);
+  const out = [];
+  for (const [id, e] of Object.entries(parse(set['overrides.json']))) {
+    const rates = fromOverride(e);
+    if (!rates) continue;
+    let upstream = fromLitellm(litellm[id]);
+    for (const [provider, block] of Object.entries(modelsdev)) upstream ??= fromModelsdev(provider, block?.models?.[id]);
+    out.push({ id, rates, upstream, source: e.source, added: e.added });
+  }
+  return out.sort((a, b) => (a.id < b.id ? -1 : 1));
+}
+
 // ---------- diff ----------
 
 const perM = (v) => v * 1e6;
@@ -226,6 +241,7 @@ export function diff(baseSet, headSet) {
   }
   for (const [id, b] of base) if (!head.has(id)) removed.push({ id, ...b });
   return {
+    overrides: overrideStatus(headSet),
     changed: collapse(changed, (e) => `${sig(e.old.rates)}>${sig(e.new.rates)}`),
     added: collapse(added, (e) => sig(e.rates)),
     removed: collapse(removed, (e) => sig(e.rates)),
@@ -255,6 +271,19 @@ export function render(baseSet, headSet, d) {
   }
   if (d.added.length) out.push('', '### Added', '', table(d.added.map(flat)));
   if (d.removed.length) out.push('', '### Removed', '', 'No longer priced by the snapshots (a stale row stays in `model_prices` until deleted by hand).', '', table(d.removed.map(flat)));
+  if (d.overrides.length) {
+    const cell = (r) => (r ? `${usd(r.input)} / ${usd(r.output)}` : 'not listed');
+    out.push('', '### Overrides in overrides.json', '', 'Input / output per M. Delete an override once upstream matches it.', '',
+      row(['Model', 'Override', 'Upstream alone', 'Status', 'Added', 'Source']), row(Array(6).fill('---')),
+      ...d.overrides.map((o) => row([
+        `\`${o.id}\``,
+        cell(o.rates),
+        cell(o.upstream),
+        o.upstream && FIELDS.every(([f]) => same(o.rates[f], o.upstream[f])) ? '**upstream matches: delete the override**' : 'upstream not caught up',
+        o.added ?? '',
+        o.source ? `[link](${o.source})` : '',
+      ])));
+  }
   if (!d.changed.length && !d.added.length && !d.removed.length) {
     out.push('', 'No rate changes for parser-emittable models. Any snapshot diff is in other providers, limits or metadata.');
   }
