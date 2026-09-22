@@ -14,10 +14,12 @@ export type Source = (typeof SOURCES)[number];
 
 export const MAX_ROWS = 5000;
 /**
- * Per (hour, source, model) row. Cache reads dominate: one developer running parallel agents
- * was measured at 575M tokens in a single hour, so the cap is a sanity bound, not a budget.
+ * Per (hour, source, model) row. This is a sanity bound against corrupt counters, not a budget:
+ * one developer running parallel agents measured 575M tokens in an hour, and the heaviest
+ * public users run fleets of agents, so the bound is set far above anything plausible today.
+ * Columns are bigint, so the value costs nothing.
  */
-export const ROW_TOKEN_CAP = 2_000_000_000;
+export const ROW_TOKEN_CAP = 1_000_000_000_000;
 export const FUTURE_SLACK_MS = 5 * 60 * 1000;
 const HOUR_MS = 3_600_000;
 const INT32_MAX = 2_147_483_647;
