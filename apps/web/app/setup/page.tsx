@@ -3,19 +3,9 @@ import Link from "next/link";
 import { CopyBox } from "@/components/copy-box";
 import { Code, PageShell, Section } from "@/components/prose";
 import { INSTALL_COMMAND, ONBOARDING_PROMPT } from "@/lib/copy";
+import { GRANULARITY_COMMAND, GRANULARITY_TEXT, UPLOADED } from "@/lib/setup-content";
 
 export const metadata: Metadata = { title: "Setup" };
-
-const UPLOADED: [string, string, string][] = [
-  ["ts", "2026-09-22T13:00:00Z", "The hour, rounded down. Nothing finer."],
-  ["source", "claude", "Which tool: claude, codex, gemini or cursor."],
-  ["model", "claude-opus-5-5", "The model id the tool logged."],
-  ["input, output", "2912, 217904", "Token counts for that hour and model."],
-  ["cache_read, cache_write_5m, cache_write_1h", "317502113, 8902114, 0", "Cache token counts, priced separately."],
-  ["reasoning", "0", "Reasoning tokens, informational (already inside output)."],
-  ["requests, conversations", "412, 6", "How many API calls and chats that hour."],
-  ["deviceId", "a random uuid", "Generated once on your machine, so two laptops don't overwrite each other."],
-];
 
 export default function SetupPage() {
   return (
@@ -68,6 +58,11 @@ export default function SetupPage() {
           </tbody>
         </table>
       </div>
+
+      <Section title="Hourly, daily or weekly" id="granularity">
+        <p>{GRANULARITY_TEXT}</p>
+        <CopyBox text={GRANULARITY_COMMAND} label="granularity command" compact />
+      </Section>
 
       <Section title="Hooks are opt-in" id="hooks">
         <p>
