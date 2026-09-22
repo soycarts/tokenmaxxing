@@ -18,7 +18,10 @@ npm package `tokenmaxxing-cli`, bin `tokenmaxxing`. Run as `npx tokenmaxxing-cli
 tokenmaxxing init                # detect tools, write ~/.tokenmaxxing/config.json, run first sync, print report
 tokenmaxxing sync                # incremental parse of all detected sources → buckets
 tokenmaxxing report [--since 7d|30d|YYYY-MM-DD] [--json] [--by model|source|day]
-tokenmaxxing plan set <provider> <plan>   # e.g. plan set claude max-20x ; plan set openai pro ; plan set cursor ultra
+tokenmaxxing plan set <provider> <plan> [xN]    # replace the provider's lines with this one; e.g. plan set claude max-20x x5
+tokenmaxxing plan add <provider> <plan> [xN]    # add a line (or add N to an existing line); plan add openai custom 100 "Codex $100"
+tokenmaxxing plan remove <provider> [<plan>]    # remove one line, or every line for the provider
+tokenmaxxing plan set <provider> none           # clear the provider
 tokenmaxxing plan list
 tokenmaxxing verify [--since 30d]         # compare Claude totals with `ccusage` if installed
 tokenmaxxing link                         # prints URL; user opens it and signs in; CLI polls; stores token
@@ -34,7 +37,7 @@ tokenmaxxing --version
 
 ## Storage (`~/.tokenmaxxing/`, override with `TOKENMAXXING_HOME`)
 
-- `config.json` — `{ version, deviceId (uuid v4, generated once), sources: {claude:{enabled,paths:[]},codex:{...},gemini:{...},cursor:{...}}, plans: {claude:"max-20x",...}, site: {url:"https://tokenmaxxing.fyi", token?:string, handle?:string} }`
+- `config.json` — `{ version, deviceId (uuid v4, generated once), sources: {claude:{enabled,paths:[]},codex:{...},gemini:{...},cursor:{...}}, plans: {claude:[{plan:"max-20x",qty:5},{plan:"pro",qty:1}],openai:[{plan:"custom",label:"Codex $100",monthly:100,qty:1}],...} (see Plans), site: {url:"https://tokenmaxxing.fyi", token?:string, handle?:string} }`
 - `buckets.jsonl` — append-only rows, one per (hour, source, model). Row schema:
   ```
   { "v":1, "ts":"2026-09-22T13:00:00Z", "source":"claude|codex|gemini|cursor", "model":"claude-opus-5-5",
@@ -92,14 +95,31 @@ Each exports `parse(ctx): Promise<Bucket[]>` where ctx gives paths, cursors, and
 
 ## Plans (`src/plans.json`)
 
+Consumer/prosumer monthly prices, refreshed 2026-09-22 (sources and date in `src/plans.md`; `apps/web/lib/plans.ts` and SQL `plan_price_usd()` mirror this table, and a web test fails if they drift):
 ```
-claude:  pro 20, max-5x 100, max-20x 200
-openai:  plus 20, pro 200          (ChatGPT plans that include Codex)
-cursor:  pro 20, pro-plus 60, ultra 200
-google:  ai-pro 19.99, ai-ultra-100 100, ai-ultra 200
+claude:  pro 20 · max-5x 100 · max-20x 200 · team-standard 25 · team-premium 125
+openai:  go 8 · plus 20 · pro-100 100 · pro 200 · business 25     (ChatGPT plans; Codex is included in Plus/Pro/Business)
+cursor:  pro 20 · pro-plus 60 · ultra 200 · teams 40
+google:  ai-plus 4.99 · ai-pro 19.99 · ai-ultra-100 99.99 · ai-ultra 199.99
 ```
-Provider ↔ source: claude→claude, openai→codex, cursor→cursor, google→gemini.
-ROI for a period = api_equivalent_cost(source, period) ÷ (plan_price × period_days ÷ 30.4375). Report shows `ROI 12.3×` per configured provider and a total line.
+Existing ids keep their meaning (`openai/pro` is the $200 tier). Provider ↔ source: claude→claude, openai→codex, cursor→cursor, google→gemini.
+
+People hold several plans from one vendor, so `config.plans` holds, per provider, a list of **lines**:
+```json
+{ "claude": [ { "plan": "max-20x", "qty": 5 }, { "plan": "pro", "qty": 1 } ],
+  "openai": [ { "plan": "custom", "label": "Codex $100 promo", "monthly": 100, "qty": 1 } ] }
+```
+- `qty` is an integer 1–99 (absent means 1). Lines with an unknown plan id, a bad qty, or an unknown provider are dropped on read. Duplicate plan ids within a provider merge by summing qty (capped at 99); custom lines merge only when label and monthly both match.
+- **Custom lines**: any provider may carry `{ plan: "custom", label, monthly }`, label 1–40 chars (trimmed; empty becomes "Custom"), monthly 0.01–10000 USD (rounded to cents). A custom line costs `monthly × qty` and is shown by its label.
+- **Legacy shape stays readable forever**: `{ "claude": "max-20x" }` means `[ { "plan": "max-20x", "qty": 1 } ]`. `loadConfig` normalises both shapes; every write emits the list shape, so an old config migrates on the next `plan`/`init`/`link`/`push` that saves it.
+- Monthly cost per provider = Σ price(plan) × qty. ROI for a period = api_equivalent_cost(source, period) ÷ (monthly × period_days ÷ 30.4375). Report shows one line per configured provider and a total line when more than one provider is set.
+
+`plan` command:
+- `plan list` prints every provider: `*` marks providers with a plan, then one row per line (`5× max-20x  $200 each  $1,000/mo`, custom lines by label), then the provider's monthly total; then the available plan ids with prices.
+- `plan set <provider> <plan> [xN]` replaces the provider's lines with one line (qty N, default 1). `plan set <provider> none|off` clears it.
+- `plan add <provider> <plan> [xN]` adds a line, or adds N to the existing line for that plan (error if the result would exceed 99).
+- `plan remove <provider> [<plan>]` removes that plan's line, or all lines for the provider. `plan remove <provider> custom [<label>]` removes the custom line with that label (the label is required when there are several).
+- Quantity is `x5` (or `×5`) anywhere after the plan, or `--qty 5`. Custom lines: `plan add|set <provider> custom <monthly> [label…] [xN]`, e.g. `plan add openai custom 100 "Codex $100 promo"`.
 
 ## Report format (`report`, default `--since 30d`)
 
@@ -115,11 +135,12 @@ codex    gpt-6-astra         ...
 ──────────────────────────────────────────────────────────────────────────────
 TOTAL                                                                  $4,476.25
 
-Plans:  claude max-20x $200/mo → API-equivalent $4,3xx → ROI 21.8×
-        openai pro $200/mo    → API-equivalent $1xx   → ROI 0.7×
+Plans:  claude   5× max-20x + 1× pro   = $1,020/mo   → API-equivalent $17,224.10   → ROI 16.9×
+        openai   1× Codex $100         = $100/mo     → API-equivalent $1xx         → ROI 1.2×
+        total                          = $1,120/mo   → API-equivalent $17,3xx      → ROI 15.5×
 Unpriced models (0 tokens counted toward $): none
 ```
-Numbers formatted with k/M/B; `--json` emits `{ period, rows:[...], totals, plans:[...], unpriced:[...] }`.
+Numbers formatted with k/M/B; `--json` emits `{ period, rows:[...], totals, plans:[...], unpriced:[...] }`, where each plan entry is `{ provider, source, lines:[{ plan, qty, monthly, label? }], monthly, api_equiv, roi }`: a line's `monthly` is the unit price per seat, the entry's `monthly` is Σ monthly × qty.
 
 ## verify
 
