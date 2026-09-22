@@ -1,0 +1,16 @@
+{
+  "sessionId": "00000000-0000-4000-8000-000000000000",
+  "projectHash": "placeholder-project-hash",
+  "startTime": "2026-09-20T10:00:00.000Z",
+  "lastUpdated": "2026-09-20T11:30:00.000Z",
+  "messages": [
+    { "id": "m1", "role": "user", "timestamp": "2026-09-20T10:00:05.000Z", "content": "<redacted prompt>" },
+    { "id": "m2", "role": "model", "timestamp": "2026-09-20T10:00:20.000Z", "model": "gemini-2.5-pro", "content": "<redacted>",
+      "tokens": { "input": 12000, "cached": 8000, "output": 900, "tool": 100, "thoughts": 400, "total": 13400 } },
+    { "id": "m3", "role": "user", "timestamp": "2026-09-20T11:10:00.000Z", "content": "<redacted prompt>" },
+    { "id": "m4", "type": "gemini", "timestamp": "2026-09-20T11:10:30.000Z", "content": "<redacted>",
+      "tokens": { "input": 3000, "cached": 0, "output": 250, "tool": 0, "thoughts": 50, "total": 3300 } },
+    { "id": "m5", "role": "model", "timestamp": "2026-09-20T11:11:00.000Z", "model": "gemini-2.5-pro", "content": "<redacted>",
+      "tokens": { "input": 0, "cached": 0, "output": 0, "tool": 0, "thoughts": 0, "total": 0 } }
+  ]
+}
