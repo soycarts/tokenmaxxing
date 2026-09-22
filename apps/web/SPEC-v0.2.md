@@ -31,7 +31,7 @@ Rendering:
 Anyone should be able to tell Claude Code or Codex "go to tokenmaxxing.fyi and set me up" and have it work with no human reading.
 
 - `/llms.txt`: short description, the onboarding prompt, the install commands, links to `/setup.md`, `/skill.md`, `/api.md`, `/privacy`, `/terms`.
-- `/skill.md`: a Claude Code / Codex skill in the standard `SKILL.md` frontmatter format (`name: tokenmaxxing`, `description:`), with steps: run `npx tokenmaxxing-cli@latest init`, show the report, offer `plan set`, offer `link` (tell the user to open the URL), then `push`; and a "do not edit the user's tool config unless asked" rule. Also served at `/SKILL.md`.
+- `/skill.md` and `/SKILL.md`: serve the repo file `skills/tokenmaxxing/SKILL.md` verbatim (read at build time), `text/markdown`.
 - `/setup.md`, `/api.md`: markdown twins of `/setup` and a new API reference (every public endpoint, params, example JSON, badge/card URLs). Implement as route handlers returning `text/markdown; charset=utf-8` with `Cache-Control: public, s-maxage=3600`.
 - Content negotiation: `/`, `/setup`, `/leaderboard`, `/u/[handle]`, `/privacy`, `/terms` return markdown when `Accept: text/markdown` is sent or when `?format=md` is present (and the JSON they already have via `/api/v1`). Implement once in a helper; the markdown for `/` and `/setup` is static, for `/leaderboard` and `/u/[handle]` it is a table built from the same data the page uses.
 - `robots.txt` allows everything including `/api/v1` reads and `/badge`, `/card`, `/embed`; `sitemap.xml` lists public pages plus public profiles.

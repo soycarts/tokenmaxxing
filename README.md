@@ -8,6 +8,13 @@ and if I like it run `npx tokenmaxxing-cli link` and open the URL it prints.
 Don't edit any of my tool config files unless I say so.
 ```
 
+## For agents
+
+Point Claude Code, Codex or any agent at this repo or at https://tokenmaxxing.fyi/skill.md. The skill in
+[`skills/tokenmaxxing/SKILL.md`](skills/tokenmaxxing/SKILL.md) walks through `init`, plans, `link`, granularity and
+`push`, and states the rules (no config edits without being asked, no credential reads, nothing uploaded until
+the user says so). The site also serves `/llms.txt`, `/setup.md` and `/api.md`.
+
 - `packages/cli` — `tokenmaxxing-cli` on npm. Zero deps. Reads local agent logs only. Never touches credentials. No telemetry.
 - `apps/web` — tokenmaxxing.fyi (Next.js on Vercel, Supabase).
 
