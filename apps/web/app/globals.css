@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * tokenmaxxing.fyi: a statement you never had to pay.
+ * Night-ledger navy, paper-white text, one amber accent for "what it would have cost".
+ * Numbers are always Martian Mono with tabular figures; words are Schibsted Grotesk.
+ */
+:root {
+  --ink: #141a2b;
+  --raised: #1b2236;
+  --sunk: #10152299;
+  --line: #2b3450;
+  --line-strong: #3a4566;
+  --paper: #ece6d8;
+  --muted: #9ba1b6;
+  --faint: #6d7490;
+  --amber: #e0a526;
+  --amber-soft: #e0a52622;
+  --danger: #ef7b6c;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-raised: var(--raised);
+  --color-sunk: var(--sunk);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-paper: var(--paper);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
+  --code-cond: var(--font-num), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  background: var(--ink);
+}
+
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.num {
+  font-family: var(--code-cond);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Martian Mono is wide at its default width; code and prompts use its condensed cut so a
+   sentence of shell fits a line. Numerals keep the default width. */
+.code-cond {
+  font-family: var(--code-cond);
+  font-stretch: 75%;
+}
+
+::selection {
+  background: var(--amber);
+  color: var(--ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+a {
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+
+/* The statement's torn bottom edge: a row of small triangles cut out of the paper. */
+.tear {
+  --tooth: 10px;
+  mask:
+    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth)) no-repeat,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(var(--tooth) * 2) var(--tooth) repeat-x;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .print-in {
+    animation: print-in 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: 150ms;
+  }
+  @keyframes print-in {
+    from {
+      clip-path: inset(0 0 100% 0);
+      transform: translateY(-12px);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+      transform: none;
+    }
+  }
+}
