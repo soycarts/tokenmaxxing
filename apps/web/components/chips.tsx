@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-/** A row of mutually exclusive links styled as a segmented control. */
+/** A row of mutually exclusive links as small sticker chips; the chosen one is pressed in. */
 export function Chips<T extends string>({
   items,
   active,
@@ -13,7 +13,7 @@ export function Chips<T extends string>({
   label: string;
 }) {
   return (
-    <nav aria-label={label} className="flex flex-wrap gap-1.5">
+    <nav aria-label={label} className="flex flex-wrap gap-2.5">
       {items.map((item) => {
         const on = item.value === active;
         return (
@@ -22,8 +22,8 @@ export function Chips<T extends string>({
             href={href(item.value)}
             aria-current={on ? "page" : undefined}
             scroll={false}
-            className={`rounded-full border px-3 py-1 text-sm no-underline transition-colors ${
-              on ? "border-amber bg-amber-soft text-paper" : "border-line text-muted hover:border-line-strong hover:text-paper"
+            className={`press display inline-flex h-9 items-center rounded-full px-3.5 text-[0.85rem] leading-none tracking-[0.04em] no-underline [--lift:3px] ${
+              on ? "bg-ink text-paper" : "bg-surface text-ink"
             }`}
           >
             {item.label}

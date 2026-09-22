@@ -7,11 +7,11 @@ export function HandleForm({ suggestion, next }: { suggestion: string; next: str
   return (
     <form action={createProfile} className="max-w-md space-y-3">
       <input type="hidden" name="next" value={next} />
-      <label htmlFor="handle" className="block font-semibold">
+      <label htmlFor="handle" className="display block text-3xl">
         Choose your handle
       </label>
-      <p className="text-sm text-muted">
-        Your public URL is <span className="code-cond text-paper">/u/handle</span>. Lowercase letters, digits and dashes, 3 to 24
+      <p className="text-sm text-ink-2">
+        Your public URL is <span className="font-mono font-semibold text-ink">/u/handle</span>. Lowercase letters, digits and dashes, 3 to 24
         characters. You can&apos;t change it later.
       </p>
       <div className="flex gap-2">
@@ -25,7 +25,7 @@ export function HandleForm({ suggestion, next }: { suggestion: string; next: str
           defaultValue={suggestion}
           autoComplete="username"
           spellCheck={false}
-          className={`${inputClass} code-cond`}
+          className={`${inputClass} font-mono`}
         />
         <SubmitButton pendingLabel="Saving…" className={primaryButtonClass}>
           Save handle

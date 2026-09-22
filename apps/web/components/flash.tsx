@@ -2,14 +2,14 @@
 export function Flash({ ok, error }: { ok?: string; error?: string }) {
   if (error) {
     return (
-      <p role="alert" className="rounded-md border border-danger/50 bg-danger/10 px-4 py-3 text-sm text-paper">
+      <p role="alert" className="rounded-xl border-[2.5px] border-danger bg-surface px-4 py-3 text-sm font-medium text-ink">
         {error}
       </p>
     );
   }
   if (ok) {
     return (
-      <p role="status" className="rounded-md border border-amber/50 bg-amber-soft px-4 py-3 text-sm text-paper">
+      <p role="status" className="rounded-xl border-[2.5px] border-edge bg-gold-soft px-4 py-3 text-sm font-medium text-ink">
         {ok}
       </p>
     );
