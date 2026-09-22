@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { bigPrimaryButtonClass } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
 
@@ -9,6 +10,17 @@ export function SignInButton({ next, label = "Sign in with GitHub" }: { next: st
       <SubmitButton pendingLabel="Redirecting to GitHub…" className={bigPrimaryButtonClass}>
         {label}
       </SubmitButton>
+      <p className="mt-3 text-sm text-ink-2">
+        By signing in you agree to the{" "}
+        <Link href="/terms" className="font-semibold text-ink underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="font-semibold text-ink underline">
+          Privacy policy
+        </Link>
+        .
+      </p>
     </form>
   );
 }

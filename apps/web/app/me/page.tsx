@@ -225,8 +225,11 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
           {admin && (
             <form action={deleteAccount} className="max-w-sm space-y-2">
               <label htmlFor="confirm" className="block text-sm text-ink-2">
-                Delete your account, devices and every pushed row. Orgs you own go too. Type{" "}
-                <span className="font-mono font-semibold text-ink">{profile.handle}</span> to confirm.
+                Delete your account, devices and every pushed row, immediately. Orgs you own go too. See{" "}
+                <Link href="/privacy#retention-and-deletion" className="font-semibold text-ink underline">
+                  retention and deletion
+                </Link>{" "}
+                in the privacy policy. Type <span className="font-mono font-semibold text-ink">{profile.handle}</span> to confirm.
               </label>
               <div className="flex gap-2">
                 <input id="confirm" name="confirm" autoComplete="off" spellCheck={false} className={`${inputClass} font-mono`} />

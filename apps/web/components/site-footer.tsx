@@ -14,8 +14,11 @@ export function SiteFooter() {
           </p>
           <nav aria-label="Footer" className="mt-6 flex flex-wrap gap-x-6 gap-y-2 font-semibold">
             <Link href="/privacy" className="underline decoration-line hover:decoration-ink">Privacy</Link>
+            <Link href="/terms" className="underline decoration-line hover:decoration-ink">Terms</Link>
             <a href={GITHUB_URL} className="underline decoration-line hover:decoration-ink">Source on GitHub</a>
             <Link href="/leaderboard/orgs" className="underline decoration-line hover:decoration-ink">Orgs</Link>
+            <Link href="/sponsors" className="underline decoration-line hover:decoration-ink">Sponsor</Link>
+            <a href="/llms.txt" className="underline decoration-line hover:decoration-ink">For agents</a>
           </nav>
         </div>
         <Link href="/" aria-label="tokenmaxxing.fyi, home" className="block w-[260px] justify-self-start md:w-[320px] md:justify-self-end">

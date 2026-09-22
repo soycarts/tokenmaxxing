@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3020",
+    "prebuild": "node scripts/sync-content.mjs",
     "build": "next build",
     "start": "next start -p 3020",
     "lint": "eslint",
     "test": "vitest run",
-    "seed-prices": "node scripts/seed-prices.mjs"
+    "seed-prices": "node scripts/seed-prices.mjs",
+    "sync-content": "node scripts/sync-content.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
