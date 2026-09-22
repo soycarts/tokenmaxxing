@@ -1,21 +1,20 @@
 import Link from "next/link";
 import { Avatar } from "@/components/avatar";
 import { Chips } from "@/components/chips";
-import { CopyBox } from "@/components/copy-box";
+import { EmbedPanel } from "@/components/embed-panel";
 import { SourceIcons, sourceLabel } from "@/components/source-icons";
 import { Sparkline } from "@/components/sparkline";
+import { SponsorStrip, SponsorThisSpot } from "@/components/sponsor";
 import type { ProfilePage } from "@/lib/data";
-import { siteUrl } from "@/lib/env";
 import { formatPct, formatRoi, formatTokens, formatUsd, roiOf } from "@/lib/format";
 import { PERIOD_LABEL, PERIODS } from "@/lib/periods";
 import { PROVIDER_LABEL, type Provider } from "@/lib/plans";
+import type { Sponsor } from "@/lib/sponsors";
 
-export function ProfileView({ p }: { p: ProfilePage }) {
+export function ProfileView({ p, sponsor = null }: { p: ProfilePage; sponsor?: Sponsor | null }) {
   const roi = roiOf(p.api_equiv_usd, p.plan_period_usd);
   const planList = Object.entries(p.plans ?? {});
   const unpriced = p.models.filter((m) => !m.priced);
-  const base = siteUrl();
-  const badge = `[![tokenmaxxing](${base}/badge/${p.handle}.svg?metric=value&period=month)](${base}/u/${p.handle})`;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 md:pt-14">
@@ -38,6 +37,7 @@ export function ProfileView({ p }: { p: ProfilePage }) {
       </header>
 
       <RoiPoster p={p} roi={roi} planList={planList} />
+      {p.public && (sponsor ? <SponsorStrip s={sponsor} /> : <SponsorThisSpot label="Sponsor this spot" className="mt-3" />)}
 
       <dl className="sticker mt-8 grid grid-cols-2 overflow-hidden sm:grid-cols-4">
         <Stat label="Tokens" value={formatTokens(p.tokens_total)} />
@@ -112,21 +112,7 @@ export function ProfileView({ p }: { p: ProfilePage }) {
         )}
       </section>
 
-      {p.public && (
-        <section aria-labelledby="badge" className="mt-14 max-w-3xl">
-          <h2 id="badge" className="display text-3xl sm:text-4xl">Badge</h2>
-          <p className="mt-2 text-ink-2">
-            For a README. Swap <code className="font-mono text-[0.85em] text-ink">metric=value</code> for{" "}
-            <code className="font-mono text-[0.85em] text-ink">roi</code> or <code className="font-mono text-[0.85em] text-ink">rank</code>, and{" "}
-            <code className="font-mono text-[0.85em] text-ink">period</code> for week, month or all.
-          </p>
-          {/* eslint-disable-next-line @next/next/no-img-element -- live SVG from our own route */}
-          <img src={`/badge/${p.handle}.svg?metric=value&period=month`} alt={`tokenmaxxing badge for ${p.handle}`} height={20} className="mt-4 h-5" />
-          <div className="mt-3">
-            <CopyBox text={badge} label="badge markdown" compact />
-          </div>
-        </section>
-      )}
+      {(p.public || p.is_you) && <EmbedPanel handle={p.handle} isPublic={p.public} />}
     </div>
   );
 }

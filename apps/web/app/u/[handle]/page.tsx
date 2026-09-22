@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { NotConfigured } from "@/components/not-configured";
 import { ProfileView } from "@/components/profile-view";
 import { getProfilePage } from "@/lib/data";
 import { HANDLE_RE, parsePeriod } from "@/lib/periods";
+import { getSponsor, recordImpression } from "@/lib/sponsors-data";
 import { createClient } from "@/lib/supabase/server";
 
 type Props = {
@@ -37,5 +39,7 @@ export default async function ProfileRoute({ params, searchParams }: Props) {
   if (!res.configured) notFound();
   if (res.error) throw new Error("profile_page failed");
   if (!res.data) notFound();
-  return <ProfileView p={res.data} />;
+  const sponsor = res.data.public ? await getSponsor("profile") : null;
+  if (sponsor) after(() => recordImpression(sponsor, "profile"));
+  return <ProfileView p={res.data} sponsor={sponsor} />;
 }

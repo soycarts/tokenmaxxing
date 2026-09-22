@@ -232,6 +232,25 @@ a {
     outline-offset: -3.5px;
   }
 }
+/* One of a light/dark pair (the Embed panel's card previews), by the same rule as the tokens. */
+.only-dark {
+  display: none;
+}
+:root[data-theme="dark"] .only-light {
+  display: none;
+}
+:root[data-theme="dark"] .only-dark {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .only-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .only-dark {
+    display: block;
+  }
+}
+
 .press:focus-visible {
   outline: 3px solid var(--accent) !important;
   outline-offset: 3px !important;
