@@ -68,6 +68,16 @@ Users choose how coarse the rows they upload are. Coarser rows reveal less (no w
 - Profile page shows a small note under the sparkline when the user's latest push was coarser than hourly ("Uploads are daily totals").
 - Privacy policy already mentions the choice (docs/legal/PRIVACY.md).
 
+## Implementation notes (as built)
+
+Where the build had to pick, or differs from the text above:
+
+- A: the docs are copied into `apps/web/content/` by `scripts/sync-content.mjs` (committed; runs as `prebuild`; a test fails on a stale copy) so a root-directory deploy never needs files outside `apps/web`. `LEGAL_EFFECTIVE_DATE` is read at build time; changing it needs a redeploy. The old `/privacy` sections (cookies, etc.) are replaced by the legal text.
+- B: `/sponsors`'s audience line counts everyone tracking (a count only) but sums dollars over **public profiles only** (`site_stats.month_usd`), because the privacy policy limits aggregates to groups of 20+. The profile placement's empty state reads "Sponsor this spot". Impressions are counted per page render only (not per API call, which is CDN-cached). Sponsor URLs and logos must be https.
+- C: the negotiated markdown lives under `/md/…` (rewritten to by `proxy.ts`). `/SKILL.md` is a `next.config` rewrite to `/skill.md` (the two folders cannot coexist on a case-insensitive disk). `/llms.txt` is `text/plain; charset=utf-8`. Markdown twins send `Vary: Accept`; the HTML pages cannot (Next owns their `Vary`), which is safe on Vercel because the rewrite runs before the CDN cache, and `?format=md` is a distinct URL elsewhere. An empty leaderboard still returns the table header.
+- D: `/embed/{handle}` is a route handler returning a hand-written page (no Next runtime, so the only script really is the resize ping, allowed by hash in its CSP); it loads Anton from our own origin. Cards pin every Anton string with `textLength` sized from Anton's metrics (`lib/anton-metrics.ts`), and draw the × and the wordmark as paths (Anton has no ×). The Embed panel also keeps the shields badge.
+- E: `profile_page` gains `granularity` (of the most recently pushed device); `/api/v1/u` passes it through. The push response for a replace carries `replaced: true`.
+
 ## Done means
 
 `npm run build`, `npm test`, `npm run lint` green; push validation tests for day/week alignment and `replaceDevice`; screenshots of `/card/carter.svg` (both sizes, both themes), `/embed/carter`, `/sponsors`, `/privacy`, `/terms`; `curl -H 'Accept: text/markdown' https://localhost/leaderboard` returns a markdown table; `/skill.md` validates as SKILL.md frontmatter. Schema change applied with the same idempotent style as the rest of `schema.sql` (do not apply to the live DB; Carter's session does that).
