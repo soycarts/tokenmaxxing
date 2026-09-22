@@ -82,5 +82,5 @@ export function profileBadge(stats: BadgeStats | null, metric: BadgeMetric, peri
       ? renderBadge(`rank ${when}`, "unranked", BADGE_GREY)
       : renderBadge(`rank ${when}`, `#${rank}`);
   }
-  return renderBadge(`value ${when}`, money(stats.api_equiv_usd ?? 0));
+  return renderBadge(`tokenmaxxing ${when}`, money(stats.api_equiv_usd ?? 0));
 }
