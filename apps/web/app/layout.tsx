@@ -1,12 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { Martian_Mono, Schibsted_Grotesk } from "next/font/google";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/env";
+import { THEME_SCRIPT } from "@/lib/theme";
 import "./globals.css";
-
-const text = Schibsted_Grotesk({ variable: "--font-text", subsets: ["latin"], display: "swap" });
-const num = Martian_Mono({ variable: "--font-num", subsets: ["latin"], display: "swap", axes: ["wdth"] });
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
@@ -15,11 +12,22 @@ export const metadata: Metadata = {
     "Paste one prompt into your coding agent. It reads your local agent logs and prices your usage at API list rates. Subscribers usually find out they are getting a very good deal.",
 };
 
-export const viewport: Viewport = { themeColor: "#141a2b", colorScheme: "dark" };
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fffdf7" },
+    { media: "(prefers-color-scheme: dark)", color: "#1c1826" },
+  ],
+  colorScheme: "light dark",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${text.variable} ${num.variable}`}>
+    // data-theme is set by the head script before paint, so the server's markup never has it
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <link rel="preload" href="/fonts/Anton.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+      </head>
       <body className="flex min-h-dvh flex-col">
         <SiteHeader />
         <main className="flex-1">{children}</main>

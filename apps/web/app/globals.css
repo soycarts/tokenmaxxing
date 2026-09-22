@@ -1,104 +1,258 @@
 @import "tailwindcss";
 
 /*
- * tokenmaxxing.fyi: a statement you never had to pay.
- * Night-ledger navy, paper-white text, one amber accent for "what it would have cost".
- * Numbers are always Martian Mono with tabular figures; words are Schibsted Grotesk.
+ * tokenmaxxing.fyi: a sibling of jobmaxxing.ai's "GUMDROP" identity.
+ * Milk paper, Liquorice ink, Sour Cherry for the thing you press, butterscotch gold for value,
+ * and the five-candy track for the four leaderboards. Anton for anything shouted; a plain
+ * readable sans for anything read. Panels, chips and buttons are stickers: a thick ink keyline
+ * and a hard offset shadow that collapses when pressed.
  */
+
+@font-face {
+  font-family: "Anton";
+  src: url("/fonts/Anton.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --ink: #141a2b;
-  --raised: #1b2236;
-  --sunk: #10152299;
-  --line: #2b3450;
-  --line-strong: #3a4566;
-  --paper: #ece6d8;
-  --muted: #9ba1b6;
-  --faint: #6d7490;
-  --amber: #e0a526;
-  --amber-soft: #e0a52622;
-  --danger: #ef7b6c;
+  color-scheme: light;
+  --paper: #fffdf7; /* Milk */
+  --surface: #ffffff;
+  --sunk: #f6f1f7;
+  --ink: #211d2e; /* Liquorice */
+  --ink-2: #5a5468;
+  --muted: #7a7389;
+  --line: #dbd2e2;
+  --edge: #211d2e; /* keylines and hard shadows */
+  --accent: #c2136b; /* Sour Cherry */
+  --on-accent: #ffffff;
+  --accent-soft: color-mix(in oklab, var(--accent) 10%, var(--surface));
+  --gold: #f5b82e; /* butterscotch: value */
+  --gold-soft: #fdf0c8;
+  --on-gold: #211d2e;
+  --danger: #c4331b;
+  --band: #211d2e; /* the scoreboard band */
+  --on-band: #fffdf7;
+
+  /* the candy track: bubblegum, apricot, butter, mint, periwinkle */
+  --candy-pink: #f18cb4;
+  --candy-apricot: #f2a65a;
+  --candy-butter: #f5b82e;
+  --candy-mint: #2fbe92;
+  --candy-peri: #7c86e8;
+}
+
+/* Dark = "Blackcurrant". An explicit [data-theme] from the header toggle wins; with no choice
+   (or no JS) the media query follows the OS. The two blocks carry identical tokens. */
+:root[data-theme="dark"] {
   color-scheme: dark;
+  --paper: #1c1826;
+  --surface: #2a2438;
+  --sunk: #221d2f;
+  --ink: #f7f4fb;
+  --ink-2: #c9c2d6;
+  --muted: #9a92ac;
+  --line: #453c58;
+  --edge: #0c0a12;
+  --accent: #ff7ec4;
+  --on-accent: #211d2e;
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+  --gold: #ffd060;
+  --gold-soft: color-mix(in oklab, var(--gold) 16%, var(--surface));
+  --on-gold: #211d2e;
+  --danger: #ff8a78;
+  --band: #13101b;
+  --on-band: #f7f4fb;
+
+  --candy-pink: #ffa3cf;
+  --candy-apricot: #ffb877;
+  --candy-butter: #ffd060;
+  --candy-mint: #6fe0b2;
+  --candy-peri: #a5afff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #1c1826;
+    --surface: #2a2438;
+    --sunk: #221d2f;
+    --ink: #f7f4fb;
+    --ink-2: #c9c2d6;
+    --muted: #9a92ac;
+    --line: #453c58;
+    --edge: #0c0a12;
+    --accent: #ff7ec4;
+    --on-accent: #211d2e;
+    --accent-soft: color-mix(in oklab, var(--accent) 18%, var(--surface));
+    --gold: #ffd060;
+    --gold-soft: color-mix(in oklab, var(--gold) 16%, var(--surface));
+    --on-gold: #211d2e;
+    --danger: #ff8a78;
+    --band: #13101b;
+    --on-band: #f7f4fb;
+
+    --candy-pink: #ffa3cf;
+    --candy-apricot: #ffb877;
+    --candy-butter: #ffd060;
+    --candy-mint: #6fe0b2;
+    --candy-peri: #a5afff;
+  }
 }
 
 @theme inline {
-  --color-ink: var(--ink);
-  --color-raised: var(--raised);
-  --color-sunk: var(--sunk);
-  --color-line: var(--line);
-  --color-line-strong: var(--line-strong);
   --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunk: var(--sunk);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
   --color-muted: var(--muted);
-  --color-faint: var(--faint);
-  --color-amber: var(--amber);
-  --color-amber-soft: var(--amber-soft);
+  --color-line: var(--line);
+  --color-edge: var(--edge);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-on-gold: var(--on-gold);
   --color-danger: var(--danger);
-  --font-sans: var(--font-text), ui-sans-serif, system-ui, sans-serif;
-  --code-cond: var(--font-num), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-band: var(--band);
+  --color-on-band: var(--on-band);
+  --color-candy-pink: var(--candy-pink);
+  --color-candy-apricot: var(--candy-apricot);
+  --color-candy-butter: var(--candy-butter);
+  --color-candy-mint: var(--candy-mint);
+  --color-candy-peri: var(--candy-peri);
+  --font-display: "Anton", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-sans: "Avenir Next", Seravek, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 html {
-  background: var(--ink);
+  background: var(--paper);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-sans);
-  font-feature-settings: "ss01";
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* tilted bands and stickers must never cause a sideways scroll */
+  overflow-x: clip;
 }
 
+/* Components live in a layer so a Tailwind utility on the same element (bg-gold on a
+   .sticker, say) always wins. */
+@layer components {
+/* Anton is a single heavy cut: never let the browser fake a bolder one. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  text-transform: uppercase;
+  letter-spacing: 0.005em;
+  line-height: 0.95;
+  text-wrap: balance;
+}
+
+/* Numbers in running text and tables: the body face, tabular. */
 .num {
-  font-family: var(--code-cond);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* Martian Mono is wide at its default width; code and prompts use its condensed cut so a
-   sentence of shell fits a line. Numerals keep the default width. */
-.code-cond {
-  font-family: var(--code-cond);
-  font-stretch: 75%;
-}
-
 ::selection {
-  background: var(--amber);
-  color: var(--ink);
+  background: var(--gold);
+  color: var(--on-gold);
 }
 
 :focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 2px;
-  border-radius: 3px;
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
 }
 
 a {
-  text-underline-offset: 0.18em;
-  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1.5px;
 }
 
-/* The statement's torn bottom edge: a row of small triangles cut out of the paper. */
-.tear {
-  --tooth: 10px;
-  mask:
-    linear-gradient(#000 0 0) top / 100% calc(100% - var(--tooth)) no-repeat,
-    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / calc(var(--tooth) * 2) var(--tooth) repeat-x;
+/* ---- stickers ------------------------------------------------------------------------ */
+
+/* A panel: ink keyline, a hard shadow, generous corners. */
+.sticker {
+  background: var(--surface);
+  border: 2.5px solid var(--edge);
+  border-radius: 22px;
+  box-shadow: 6px 6px 0 var(--edge);
 }
+
+/* Anything pressable: lifts a hair on hover, and the shadow collapses under the press. */
+.press {
+  --lift: 4px;
+  border: 2.5px solid var(--edge);
+  box-shadow: var(--lift) var(--lift) 0 var(--edge);
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out,
+    background-color 120ms,
+    opacity 120ms;
+}
+.press:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: calc(var(--lift) + 1px) calc(var(--lift) + 1px) 0 var(--edge);
+}
+.press:active,
+.press[aria-current="page"] {
+  transform: translate(var(--lift), var(--lift));
+  box-shadow: 0 0 0 var(--edge);
+}
+.press:disabled {
+  cursor: progress;
+  opacity: 0.6;
+  transform: translate(var(--lift), var(--lift));
+  box-shadow: 0 0 0 var(--edge);
+}
+
+/* In the dark the keyline also gets a faint light rim, so an ink edge on Blackcurrant still
+   reads as the edge of something. */
+:root[data-theme="dark"] .sticker,
+:root[data-theme="dark"] .press {
+  outline: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
+  outline-offset: -3.5px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sticker,
+  :root:not([data-theme="light"]) .press {
+    outline: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
+    outline-offset: -3.5px;
+  }
+}
+.press:focus-visible {
+  outline: 3px solid var(--accent) !important;
+  outline-offset: 3px !important;
+}
+}
+
+/* ---- motion: one moment, on the home page ----------------------------------------------- */
 
 @media (prefers-reduced-motion: no-preference) {
-  .print-in {
-    animation: print-in 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-    animation-delay: 150ms;
+  /* the example report is slapped onto the page like a sticker */
+  .slap {
+    animation: slap 700ms cubic-bezier(0.2, 0.9, 0.25, 1.2) both;
+    animation-delay: 120ms;
   }
-  @keyframes print-in {
+  @keyframes slap {
     from {
-      clip-path: inset(0 0 100% 0);
-      transform: translateY(-12px);
+      opacity: 0;
+      transform: rotate(-9deg) scale(1.12) translateY(-24px);
     }
     to {
-      clip-path: inset(0 0 0 0);
-      transform: none;
+      opacity: 1;
     }
   }
 }
