@@ -11,7 +11,7 @@ const CHUNK = 1000;
 /**
  * POST /api/v1/push. Bearer device token → (user, device). Body `{ v:1, deviceId, rows }`.
  * Valid rows are upserted on (device_id, ts, source, model), replacing the hour's totals.
- * 200 when every row was accepted, 422 when any row was rejected (the rest are still written).
+ * 200 always once authenticated and parsed; `rejected` lists rows that failed validation (the rest are written).
  * The device comes from the token; the body's deviceId is the CLI's local id and is only
  * validated, never trusted for authorisation.
  */
@@ -63,5 +63,5 @@ export async function POST(request: Request) {
     admin.from("api_tokens").update({ last_used_at: now }).eq("token_hash", auth.token_hash),
   ]);
 
-  return json({ accepted: rows.length, rejected: result.rejected }, { status: result.rejected.length ? 422 : 200 });
+  return json({ accepted: rows.length, rejected: result.rejected }, { status: 200 });
 }

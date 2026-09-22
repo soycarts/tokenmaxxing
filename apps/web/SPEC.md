@@ -59,8 +59,8 @@ Pages
 - `/privacy` — plain page.
 
 API (all JSON, `app/api/v1/...`)
-- `GET /api/v1/link/{code}` — CLI polls. 404 until confirmed; then `{ token, handle }` **once** (then null the plaintext and set consumed_at). Rate-limit by IP (in-memory Map is fine on Vercel for v1; note the limitation).
-- `POST /api/v1/push` — Bearer token → user/device. Body `{ v:1, deviceId, rows:[...] }` ≤ 5000 rows. Validate with zod: ts is a whole hour, not in the future (+5 min slack), source ∈ claude|codex|gemini|cursor, all counts ≥ 0 integers, per-row tokens ≤ 50M/hour (flag, don't reject: set `flagged=true`? — v1: reject rows over the cap with a 422 listing them). Upsert on PK. Update `devices.last_push_at`, `api_tokens.last_used_at`. Returns `{ accepted, rejected:[...] }`.
+- `GET /api/v1/link/{code}` — CLI polls. `202 { error:"pending" }` until confirmed (404 means the endpoint does not exist); then `{ token, handle }` **once** (then null the plaintext and set consumed_at). Rate-limit by IP (in-memory Map is fine on Vercel for v1; note the limitation).
+- `POST /api/v1/push` — Bearer token → user/device. Body `{ v:1, deviceId, rows:[...] }` ≤ 5000 rows. Validate with zod: ts is a whole hour, not in the future (+5 min slack), source ∈ claude|codex|gemini|cursor, all counts ≥ 0 integers, per-row tokens ≤ 50M/hour (flag, don't reject: set `flagged=true`? — v1: drop rows over the cap and list them in `rejected`; still 200). Upsert on PK. Update `devices.last_push_at`, `api_tokens.last_used_at`. Returns `{ accepted, rejected:[...] }`.
 - `GET /api/v1/leaderboard?period=week&metric=value` — public, `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`.
 - `GET /api/v1/u/{handle}?period=month` — public profile aggregates (404 if not public).
 - `GET /api/v1/orgs/{slug}` — public org aggregates.

@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 const limiter = createRateLimiter(40, 60_000);
 
 /**
- * GET /api/v1/link/{code}: 404 until the code is confirmed on /link, then `{ token, handle }`
+ * GET /api/v1/link/{code}: 202 `{ error: "pending" }` until the code is confirmed (404 is reserved for "no such endpoint" so the CLI can tell them apart) on /link, then `{ token, handle }`
  * exactly once. The plaintext token is nulled in the same statement that returns it.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ code: string }> }) {
@@ -27,6 +27,6 @@ export async function GET(request: Request, ctx: { params: Promise<{ code: strin
     return json({ error: "server_error" }, { status: 500 });
   }
   const row = Array.isArray(data) ? data[0] : null;
-  if (!row?.token) return json({ error: "pending" }, { status: 404 });
+  if (!row?.token) return json({ error: "pending" }, { status: 202 });
   return json({ token: row.token, handle: row.handle });
 }
