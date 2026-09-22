@@ -30,7 +30,10 @@ export function SubmitButton({
       onClick={(e) => {
         const form = e.currentTarget.form;
         if (form && !form.checkValidity()) return;
-        setClicked(true);
+        // Defer: a submit button that is disabled by the time the click's default action runs
+        // does not submit a plain POST form (the GitHub sign-in form). Flip the flag on the next
+        // macrotask, after the browser has started the submission.
+        window.setTimeout(() => setClicked(true), 0);
         window.setTimeout(() => setClicked(false), 8000);
       }}
     >
