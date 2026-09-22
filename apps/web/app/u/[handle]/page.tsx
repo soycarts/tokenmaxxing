@@ -24,8 +24,8 @@ export default async function ProfileRoute({ params, searchParams }: Props) {
   const supabase = await createClient();
   if (!supabase) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pt-12 sm:px-6 md:pt-16">
-        <h1 className="text-4xl font-extrabold tracking-[-0.03em]">@{handle}</h1>
+      <div className="mx-auto max-w-6xl px-4 pt-10 sm:px-6 md:pt-14">
+        <h1 className="display text-5xl sm:text-6xl">@{handle}</h1>
         <div className="mt-8 max-w-2xl">
           <NotConfigured what="Profiles will show up here" />
         </div>
