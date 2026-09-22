@@ -4,6 +4,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { fakeHome, isolatedEnv, readBuckets, runCli, tmp } from './helpers.mjs';
+import { SNAPSHOT_DATE } from '../dist/pricing/index.js';
 
 const ENV = (home, extra) => isolatedEnv(home, { TZ: 'UTC', ...extra });
 const cfgOf = (home) => JSON.parse(readFileSync(join(home, '.tokenmaxxing', 'config.json'), 'utf8'));
@@ -19,7 +20,7 @@ test('init: detects sources, writes config, syncs, prints report and the Next li
   assert.equal(cfg.sources.gemini.enabled, true);
   assert.equal(cfg.sources.cursor.enabled, false);
   assert.equal(cfg.site.url, 'https://tokenmaxxing.fyi');
-  assert.match(r.stdout, /tokenmaxxing · since 2025-12-01 · 2025-12-01 → \d{4}-\d{2}-\d{2} · pricing snapshot 2026-09-22/);
+  assert.match(r.stdout, new RegExp(`tokenmaxxing · since 2025-12-01 · 2025-12-01 → \\d{4}-\\d{2}-\\d{2} · pricing snapshot ${SNAPSHOT_DATE}`));
   assert.match(r.stdout, /claude\s+claude-fable-5\s+8\.7k\s+117\.9k\s+16\.4k\s+3\.3k\s+\$/);
   assert.match(r.stdout, /codex\s+gpt-6-astra\s+50\.6k\s+37\.8k\s+0\s+469\s+\$/);
   assert.match(r.stdout, /gemini\s+gemini-unknown\s+3\.0k\s+0\s+0\s+300\s+unpriced/);
@@ -139,7 +140,7 @@ test('doctor and --version', async () => {
   await runCli(['init'], ENV(home));
   const d = await runCli(['doctor'], ENV(home));
   assert.equal(d.code, 0, d.stderr);
-  assert.match(d.stdout, /bundled snapshot 2026-09-22/);
+  assert.ok(d.stdout.includes(`bundled snapshot ${SNAPSHOT_DATE}`), d.stdout);
   assert.match(d.stdout, /claude: enabled/);
   assert.match(d.stdout, /skipped garbled lines 1/);
   const v = await runCli(['--version'], ENV(home));

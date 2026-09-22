@@ -4,22 +4,48 @@ import { resolve, cost, candidates, normalize, SNAPSHOT_DATE, _setTables } from 
 
 const T = { input: 21721, output: 513976, cache_write_5m: 3570946, cache_write_1h: 0, cache_read: 221663704 };
 
-test('claude-fable-5-1 sanity cost matches ccusage (125.97 ± 0.01)', () => {
-  const r = resolve('claude-fable-5-1');
-  assert.ok(r);
-  assert.ok(Math.abs(cost(T, r) - 125.97) <= 0.01, `got ${cost(T, r)}`);
+// claude-fable-5-1 as LiteLLM priced it on 2026-09-22. The sanity test runs on this fixed table, not the
+// bundled snapshot, so it checks the mapping and the math and never blocks a legitimate price change.
+const FABLE_5_1 = {
+  input_cost_per_token: 1e-5,
+  output_cost_per_token: 5e-5,
+  cache_read_input_token_cost: 2.5e-7,
+  cache_creation_input_token_cost: 1.25e-5,
+  cache_creation_input_token_cost_above_1hr: 2e-5,
+  litellm_provider: 'anthropic',
+};
+
+function withTables(t, fn) {
+  _setTables({ litellm: {}, modelsdev: {}, overrides: {}, ...t });
+  try {
+    return fn();
+  } finally {
+    _setTables({ litellm: undefined, modelsdev: undefined, overrides: undefined });
+  }
+}
+
+test('claude-fable-5-1 sanity cost matches ccusage (125.97 ± 0.01) on the fixed rate table', () => {
+  withTables({ litellm: { 'claude-fable-5-1': FABLE_5_1 } }, () => {
+    const r = resolve('claude-fable-5-1');
+    assert.ok(r);
+    assert.ok(Math.abs(cost(T, r) - 125.97) <= 0.01, `got ${cost(T, r)}`);
+    // the same tokens written to the 1h cache cost exactly (1h - 5m rate) more
+    const oneHour = { ...T, cache_write_5m: 0, cache_write_1h: T.cache_write_5m };
+    assert.ok(Math.abs(cost(oneHour, r) - cost(T, r) - 3570946 * (2e-5 - 1.25e-5)) < 1e-6);
+  });
 });
 
-test('the same tokens written to the 1h cache cost more', () => {
+test('bundled snapshot: claude-fable-5-1 is priced and its 1h cache write costs more than 5m', () => {
   const r = resolve('claude-fable-5-1');
+  assert.ok(r, 'claude-fable-5-1 missing from the bundled snapshot');
+  for (const [k, v] of Object.entries(r)) assert.ok(v > 0, `${k} is ${v}`);
   const oneHour = { ...T, cache_write_5m: 0, cache_write_1h: T.cache_write_5m };
-  assert.ok(cost(oneHour, r) > cost(T, r));
-  // LiteLLM cache_creation_input_token_cost_above_1hr for fable-5-1 is $20/M vs $12.5/M
-  assert.ok(Math.abs(cost(oneHour, r) - cost(T, r) - 3570946 * (2e-5 - 1.25e-5)) < 1e-6);
+  assert.ok(cost(oneHour, r) > cost(T, r), 'cache_write_1h must be above cache_write_5m (was the 1h field trimmed?)');
 });
 
-test('snapshot date constant', () => {
-  assert.equal(SNAPSHOT_DATE, '2026-09-22');
+test('snapshot date constant is an ISO date, not in the future', () => {
+  assert.match(SNAPSHOT_DATE, /^\d{4}-\d{2}-\d{2}$/);
+  assert.ok(SNAPSHOT_DATE <= new Date().toISOString().slice(0, 10));
 });
 
 test('normalised matches: dots, provider prefixes, date and bedrock suffixes', () => {
@@ -41,11 +67,14 @@ test('unknown models are null (reported unpriced, never $0)', () => {
 });
 
 test('LiteLLM mapping: missing cache_creation falls back to input; 1h falls back to 5m', () => {
-  const r = resolve('gpt-5.1-codex-max');
-  assert.equal(r.input, 0.00000125);
-  assert.equal(r.cache_read, 1.25e-7);
-  assert.equal(r.cache_write_5m, r.input);
-  assert.equal(r.cache_write_1h, r.cache_write_5m);
+  const entry = { input_cost_per_token: 1.25e-6, output_cost_per_token: 1e-5, cache_read_input_token_cost: 1.25e-7, litellm_provider: 'openai' };
+  withTables({ litellm: { 'gpt-5.1-codex-max': entry } }, () => {
+    const r = resolve('gpt-5.1-codex-max');
+    assert.equal(r.input, 0.00000125);
+    assert.equal(r.cache_read, 1.25e-7);
+    assert.equal(r.cache_write_5m, r.input);
+    assert.equal(r.cache_write_1h, r.cache_write_5m);
+  });
 });
 
 test('resolution order: overrides > LiteLLM exact > models.dev exact (anthropic 1h = 1.6×)', () => {
