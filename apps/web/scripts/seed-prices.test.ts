@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildPriceTable, generate, modelKey, toSql } from "./seed-prices.mjs";
+import { buildPriceTable, generate, modelKey, pinnedUnpriced, toSql } from "./seed-prices.mjs";
 
 type Rates = { input: number; cache_read: number; cache_write_5m: number; cache_write_1h: number; output: number };
 
@@ -24,24 +24,51 @@ describe("seed-prices", () => {
     expect(cost(oneHour, r)).toBeGreaterThan(cost(tokens, r));
   });
 
+  // The same cases are asserted against public.model_key() in supabase/schema.test.sql.
+  const KEY_CASES: [string, string][] = [
+    ["anthropic/Claude-Fable-5.1-20260101", "claude-fable-5-1"],
+    ["us.anthropic.claude-opus-5-5-v1:0", "claude-opus-5-5"],
+    ["gpt-5.1-codex-max", "gpt-5-1-codex-max"],
+    ["claude-opus-5-5", "claude-opus-5-5"],
+    ["gemini-3.1-pro@20260301", "gemini-3-1-pro"],
+    ["gpt-6-astra-2026-08-01", "gpt-6-astra"],
+    ["  Mixed.Case.Name  ", "mixed.case.name"],
+  ];
+
   it("normalises keys the same way as public.model_key()", () => {
-    expect(modelKey("anthropic/Claude-Fable-5.1-20260101")).toBe("claude-fable-5-1");
-    expect(modelKey("gpt-5.1-codex-max")).toBe("gpt-5-1-codex-max");
-    expect(modelKey("claude-opus-5-5")).toBe("claude-opus-5-5");
+    for (const [input, expected] of KEY_CASES) expect(modelKey(input), input).toBe(expected);
   });
 
   it("adds normalised aliases without overriding real keys, and applies precedence", () => {
     const t = buildPriceTable({
       overrides: { "my-model": { input: 1, output: 2 } },
-      litellm: { "my-model": { input_cost_per_token: 9, output_cost_per_token: 9 }, "Foo.Bar-20250101": { input_cost_per_token: 3, output_cost_per_token: 4 } },
+      litellm: {
+        "my-model": { input_cost_per_token: 9, output_cost_per_token: 9 },
+        "Foo-5.1-20250101": { input_cost_per_token: 3, output_cost_per_token: 4 },
+        "bedrock/Foo-5.1-20250101": { input_cost_per_token: 7, output_cost_per_token: 7 },
+      },
       modelsdev: { anthropic: { models: { "claude-x": { cost: { input: 1, output: 5, cache_write: 1.25 } } } } },
     });
-    expect(t.get("my-model")).toMatchObject({ input: 1, output: 2, cache_read: 1 });
-    expect(t.get("foo-bar")).toMatchObject({ input: 3, output: 4 });
+    // overrides are per million tokens, like the CLI's
+    expect(t.get("my-model")).toMatchObject({ input: 1e-6, output: 2e-6, cache_read: 1e-6 });
+    // the shortest source id wins the alias
+    expect(t.get("foo-5-1")).toMatchObject({ input: 3, output: 4 });
     const cx = t.get("claude-x")!;
     expect(cx.input).toBeCloseTo(1e-6);
     expect(cx.cache_read).toBeCloseTo(1e-6); // missing cache_read falls back to input, never $0
     expect(cx.cache_write_1h).toBeCloseTo(1.25e-6 * 1.6);
+  });
+
+  it("never prices a model pinned as unpriced, not even through an alias", () => {
+    const overrides = { "gpt-reserve": { unpriced: "bundled" } };
+    const t = buildPriceTable({
+      overrides,
+      litellm: { "gpt-reserve": { input_cost_per_token: 1, output_cost_per_token: 1 }, "openai/gpt-reserve": { input_cost_per_token: 1, output_cost_per_token: 1 } },
+    });
+    expect(t.has("gpt-reserve")).toBe(false);
+    expect(t.has("openai/gpt-reserve")).toBe(true); // an exact id still resolves, as in the CLI
+    const sql = toSql(t, "2026-09-22", pinnedUnpriced(overrides));
+    expect(sql).toContain("delete from public.model_prices where model in ('gpt-reserve');");
   });
 
   it("never emits a priced row with a zero input and output rate from missing data", () => {

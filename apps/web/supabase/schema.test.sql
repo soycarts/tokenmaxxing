@@ -50,6 +50,25 @@ union all select bob, dev_b, h, 'gemini', 'tm-test-mystery-model', 5000, 0, 0, 0
 -- carol (private): $100
 union all select carol, dev_c, h, 'claude', 'tm-test-model', 0, 0, 0, 0, 10000000, 1 from t_ids;
 
+-- Same cases as KEY_CASES in scripts/seed-prices.test.ts.
+do $$
+declare c record;
+begin
+  for c in select * from (values
+    ('anthropic/Claude-Fable-5.1-20260101', 'claude-fable-5-1'),
+    ('us.anthropic.claude-opus-5-5-v1:0', 'claude-opus-5-5'),
+    ('gpt-5.1-codex-max', 'gpt-5-1-codex-max'),
+    ('claude-opus-5-5', 'claude-opus-5-5'),
+    ('gemini-3.1-pro@20260301', 'gemini-3-1-pro'),
+    ('gpt-6-astra-2026-08-01', 'gpt-6-astra'),
+    ('  Mixed.Case.Name  ', 'mixed.case.name')
+  ) as t(input, expected) loop
+    if public.model_key(c.input) is distinct from c.expected then
+      raise exception 'model_key(%) = %, expected %', c.input, public.model_key(c.input), c.expected;
+    end if;
+  end loop;
+end $$;
+
 -- -------------------------------------------------------------- leaderboards (as anon)
 set local role anon;
 

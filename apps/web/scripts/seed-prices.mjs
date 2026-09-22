@@ -8,10 +8,14 @@
  *
  * Precedence mirrors the CLI's resolve(): overrides, then LiteLLM exact, then models.dev exact.
  * Every key is also emitted under its normalised form (see modelKey, mirrored by the SQL
- * function public.model_key) unless that form is already a real key, which gives the server
- * the CLI's "normalised match" step as a plain index lookup.
+ * function public.model_key) unless that form is already a real key, shortest source id first
+ * like the CLI's canonical index. That gives the server the CLI's fuzzy-match step as a plain
+ * index lookup.
  *
- * Rates are USD per token. Missing cache rates fall back to the input rate, never to $0.
+ * Overrides are USD per million tokens (as in the CLI); `{ "unpriced": "<note>" }` pins a model
+ * as unpriced: it gets no row, no alias resolves to it, and any stale row is deleted.
+ *
+ * Output rates are USD per token. Missing cache rates fall back to the input rate, never $0.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -22,13 +26,21 @@ const pricingDir = resolve(here, "../../../packages/cli/src/pricing");
 const outFile = resolve(here, "../supabase/seed_prices.sql");
 const FALLBACK_SNAPSHOT_DATE = "2026-09-22";
 
-/** lowercase, drop any `provider/` prefix, drop a trailing -YYYYMMDD, dots to dashes. */
+/**
+ * The CLI's canon(): lowercase; drop a `provider/` prefix, a bedrock `us.anthropic.` style
+ * prefix, a `-v1:0` suffix and a date suffix; version dots to dashes (opus-5.5 == opus-5-5).
+ * Keep in step with public.model_key() in schema.sql (a test compares them).
+ */
 export function modelKey(model) {
   return model
-    .replace(/^.*\//, "")
+    .trim()
     .toLowerCase()
-    .replace(/-[0-9]{8}$/, "")
-    .replaceAll(".", "-");
+    .replace(/^.*\//, "")
+    .replace(/^(?:[a-z]{2,4}\.)?(?:anthropic|openai|google|meta|amazon)\./, "")
+    .replace(/-v\d+(?::\d+)?$/, "")
+    .replace(/[-@]\d{8}$/, "")
+    .replace(/-\d{4}-\d{2}-\d{2}$/, "")
+    .replace(/(\d)\.(\d)/g, "$1-$2");
 }
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
@@ -64,6 +76,7 @@ function fromModelsDev(provider, entry) {
   };
 }
 
+/** Overrides are per MILLION tokens, like models.dev. */
 function fromOverride(entry) {
   if (!entry || typeof entry !== "object") return null;
   const input = num(entry.input);
@@ -71,19 +84,32 @@ function fromOverride(entry) {
   if (input === undefined || output === undefined) return null;
   const cw5 = num(entry.cache_write_5m) ?? input;
   return {
-    input,
-    cache_read: num(entry.cache_read) ?? input,
-    cache_write_5m: cw5,
-    cache_write_1h: num(entry.cache_write_1h) ?? cw5,
-    output,
+    input: input / 1e6,
+    cache_read: (num(entry.cache_read) ?? input) / 1e6,
+    cache_write_5m: cw5 / 1e6,
+    cache_write_1h: (num(entry.cache_write_1h) ?? cw5) / 1e6,
+    output: output / 1e6,
   };
+}
+
+/** Model ids pinned as unpriced by overrides.json, plus their normalised forms. */
+export function pinnedUnpriced(overrides = {}) {
+  const out = new Set();
+  for (const [model, entry] of Object.entries(overrides)) {
+    if (entry && typeof entry.unpriced === "string") {
+      out.add(model);
+      out.add(modelKey(model));
+    }
+  }
+  return out;
 }
 
 /** Returns a Map model → rates, ordered by insertion precedence. */
 export function buildPriceTable({ litellm = {}, modelsdev = {}, overrides = {} }) {
   const table = new Map();
+  const pinned = pinnedUnpriced(overrides);
   const put = (model, rates) => {
-    if (rates && !table.has(model)) table.set(model, rates);
+    if (rates && !table.has(model) && !pinned.has(model)) table.set(model, rates);
   };
   for (const [model, entry] of Object.entries(overrides)) put(model, fromOverride(entry));
   for (const [model, entry] of Object.entries(litellm)) {
@@ -93,10 +119,8 @@ export function buildPriceTable({ litellm = {}, modelsdev = {}, overrides = {} }
   for (const [provider, block] of Object.entries(modelsdev)) {
     for (const [model, entry] of Object.entries(block?.models ?? {})) put(model, fromModelsDev(provider, entry));
   }
-  for (const [model, rates] of [...table.entries()]) {
-    const key = modelKey(model);
-    if (!table.has(key)) table.set(key, rates);
-  }
+  const sources = [...table.keys()].sort((a, b) => a.length - b.length || (a < b ? -1 : 1));
+  for (const model of sources) put(modelKey(model), table.get(model));
   return table;
 }
 
@@ -105,8 +129,9 @@ export function buildPriceTable({ litellm = {}, modelsdev = {}, overrides = {} }
 const lit = (n) => String(Number(n.toPrecision(12)));
 const q = (s) => `'${s.replaceAll("'", "''")}'`;
 
-export function toSql(table, snapshotDate) {
+export function toSql(table, snapshotDate, pinned = new Set()) {
   const models = [...table.keys()].sort();
+  const unpriced = [...pinned].sort();
   const lines = models.map((m) => {
     const r = table.get(m);
     return `  (${q(m)}, ${lit(r.input)}, ${lit(r.cache_read)}, ${lit(r.cache_write_5m)}, ${lit(r.cache_write_1h)}, ${lit(r.output)}, date ${q(snapshotDate)})`;
@@ -123,6 +148,9 @@ export function toSql(table, snapshotDate) {
     "  cache_write_1h = excluded.cache_write_1h,",
     "  output = excluded.output,",
     "  snapshot_date = excluded.snapshot_date;",
+    ...(unpriced.length
+      ? ["", "-- Pinned as unpriced by overrides.json: never priced, even by a normalised match.", `delete from public.model_prices where model in (${unpriced.map(q).join(", ")});`]
+      : []),
     "",
   ].join("\n");
 }
@@ -144,12 +172,13 @@ function snapshotDate() {
 }
 
 export function generate() {
+  const overrides = readJson(join(pricingDir, "overrides.json"), {});
   const table = buildPriceTable({
     litellm: readJson(join(pricingDir, "litellm.snapshot.json"), {}),
     modelsdev: readJson(join(pricingDir, "modelsdev.snapshot.json"), {}),
-    overrides: readJson(join(pricingDir, "overrides.json"), {}),
+    overrides,
   });
-  return toSql(table, snapshotDate());
+  return toSql(table, snapshotDate(), pinnedUnpriced(overrides));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -36,11 +36,20 @@ begin
   return result;
 end $$;
 
--- Normalised model id, mirrored by modelKey() in scripts/seed-prices.mjs:
--- lowercase, drop any `provider/` prefix, drop a trailing -YYYYMMDD, dots to dashes.
+-- Normalised model id, the CLI's canon(), mirrored by modelKey() in scripts/seed-prices.mjs
+-- (a test compares them): lowercase; drop a `provider/` prefix, a bedrock `us.anthropic.`
+-- style prefix, a `-v1:0` suffix and a date suffix; version dots to dashes.
 create or replace function public.model_key(m text)
 returns text language sql immutable parallel safe set search_path = '' as $$
-  select replace(regexp_replace(lower(regexp_replace(m, '^.*/', '')), '-[0-9]{8}$', ''), '.', '-')
+  select regexp_replace(
+    regexp_replace(regexp_replace(regexp_replace(regexp_replace(regexp_replace(
+      lower(btrim(m)),
+      '^.*/', ''),
+      '^(?:[a-z]{2,4}\.)?(?:anthropic|openai|google|meta|amazon)\.', ''),
+      '-v[0-9]+(?::[0-9]+)?$', ''),
+      '[-@][0-9]{8}$', ''),
+      '-[0-9]{4}-[0-9]{2}-[0-9]{2}$', ''),
+    '([0-9])\.([0-9])', '\1-\2', 'g')
 $$;
 
 -- Plan prices, USD per month. Mirrors lib/plans.ts (a unit test keeps them in step).
