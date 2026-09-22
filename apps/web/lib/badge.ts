@@ -6,6 +6,8 @@
  * squeeze rather than overflow if a font differs.
  */
 
+import { COIN_INK, coinSvg } from "./coin";
+
 const NARROW = new Set("ijl.,:;|!'`() Iit[]f".split(""));
 const WIDE = new Set("mwMW@%".split(""));
 
@@ -31,22 +33,27 @@ export function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-export const BADGE_ACCENT = "#e0a526";
+export const BADGE_ACCENT = "#f5b82e"; // butterscotch gold, the site's colour for value
 export const BADGE_GREY = "#9f9f9f";
-const LABEL_BG = "#3b4153";
+const LABEL_BG = COIN_INK; // Liquorice
+
+/** The coin mark at badge size, ~15px, at the left of the label. */
+const MARK_W = 18; // the room it takes, in px
+const MARK = `<g transform="translate(2.5 2) scale(0.125)">${coinSvg({ shadow: false })}</g>`;
 
 export function renderBadge(label: string, message: string, color: string = BADGE_ACCENT): string {
   const pad = 6;
-  const lw = textWidth(label) + pad * 2;
+  const lw = textWidth(label) + pad * 2 + MARK_W;
   const mw = textWidth(message) + pad * 2;
   const w = lw + mw;
+  const lx = MARK_W + (lw - MARK_W) / 2; // the label's centre, right of the mark
   const l = escapeXml(label);
   const m = escapeXml(message);
   const c = /^#[0-9a-fA-F]{3,8}$/.test(color) ? color : BADGE_ACCENT;
-  const dark = c === BADGE_ACCENT; // amber reads better with dark text
-  const msgFill = dark ? "#1b1f2a" : "#fff";
+  const dark = c === BADGE_ACCENT; // gold reads better with dark text
+  const msgFill = dark ? COIN_INK : "#fff";
   // Text is drawn at 10x and scaled down, the shields.io trick for crisp sub-pixel placement.
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="20" role="img" aria-label="${l}: ${m}"><title>${l}: ${m}</title><linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><clipPath id="r"><rect width="${w}" height="20" rx="3" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="${lw}" height="20" fill="${LABEL_BG}"/><rect x="${lw}" width="${mw}" height="20" fill="${c}"/><rect width="${w}" height="20" fill="url(#s)"/></g><g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="${lw * 5}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(lw - pad * 2) * 10}">${l}</text><text x="${lw * 5}" y="140" transform="scale(.1)" textLength="${(lw - pad * 2) * 10}">${l}</text><text aria-hidden="true" x="${(lw + mw / 2) * 10}" y="150" fill="#010101" fill-opacity="${dark ? 0 : 0.3}" transform="scale(.1)" textLength="${(mw - pad * 2) * 10}">${m}</text><text x="${(lw + mw / 2) * 10}" y="140" fill="${msgFill}" transform="scale(.1)" textLength="${(mw - pad * 2) * 10}">${m}</text></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="20" role="img" aria-label="${l}: ${m}"><title>${l}: ${m}</title><clipPath id="r"><rect width="${w}" height="20" rx="4" fill="#fff"/></clipPath><g clip-path="url(#r)"><rect width="${lw}" height="20" fill="${LABEL_BG}"/><rect x="${lw}" width="${mw}" height="20" fill="${c}"/></g>${MARK}<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="110"><text aria-hidden="true" x="${lx * 10}" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="${(lw - MARK_W - pad * 2) * 10}">${l}</text><text x="${lx * 10}" y="140" transform="scale(.1)" textLength="${(lw - MARK_W - pad * 2) * 10}">${l}</text><text aria-hidden="true" x="${(lw + mw / 2) * 10}" y="150" fill="#010101" fill-opacity="${dark ? 0 : 0.3}" transform="scale(.1)" textLength="${(mw - pad * 2) * 10}">${m}</text><text x="${(lw + mw / 2) * 10}" y="140" fill="${msgFill}" transform="scale(.1)" textLength="${(mw - pad * 2) * 10}">${m}</text></g></svg>`;
 }
 
 export type BadgeMetric = "value" | "roi" | "rank";
