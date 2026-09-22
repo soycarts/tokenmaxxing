@@ -42,3 +42,8 @@ export function formatDate(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return "never";
   return d.toISOString().slice(0, 16).replace("T", " ") + " UTC";
 }
+
+/** API-equivalent value as a multiple of what the plans cost over the same period; null without a plan. */
+export function roiOf(apiEquivUsd: number, planPeriodUsd: number): number | null {
+  return planPeriodUsd > 0 ? apiEquivUsd / planPeriodUsd : null;
+}

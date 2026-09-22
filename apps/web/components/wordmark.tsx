@@ -1,4 +1,4 @@
-import { WORDMARK_LINE, WORDMARK_STACK } from "@/lib/wordmark-paths";
+import { WM_GOLD as GOLD, WM_INK as INK, WM_KEY as KEY, WORDMARK_LAYOUTS, wordmarkStep, wordmarkTrail } from "@/lib/wordmark-svg";
 
 /**
  * The TOKENMAXXING wordmark, built like jobmaxxing.ai's: Anton outlines, slanted and tilted,
@@ -11,35 +11,9 @@ import { WORDMARK_LINE, WORDMARK_STACK } from "@/lib/wordmark-paths";
  * `id` must be unique on the page: the letters are drawn once and re-used by reference.
  */
 
-const INK = "#211d2e";
-const KEY = "#ffffff";
-const GOLD = "#F5B82E";
-const EXTRUDE = [10, 17] as const;
-const TRAIL = ["#ffd060", "#ffb877", "#ffa3cf", "#a5afff"];
-
-function mix(a: string, b: string, t: number): string {
-  const ch = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
-  return `#${[0, 1, 2]
-    .map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, "0"))
-    .join("")}`;
-}
-
-/** Back to front: the colour of each extrusion step, the first ~40% solid ink. */
-function trail(steps: number): string[] {
-  const solid = Math.round(steps * 0.4);
-  const rest = steps - solid;
-  const out = Array<string>(solid).fill(INK);
-  for (let i = 0; i < rest; i++) {
-    const t = (i / Math.max(rest - 1, 1)) * (TRAIL.length - 1);
-    const j = Math.min(Math.floor(t), TRAIL.length - 2);
-    out.push(mix(TRAIL[j], TRAIL[j + 1], t - j));
-  }
-  return out;
-}
-
 const LAYOUTS = {
-  stack: { ...WORDMARK_STACK, steps: 34 },
-  line: { ...WORDMARK_LINE, steps: 18 },
+  stack: { ...WORDMARK_LAYOUTS.stack, steps: 34 },
+  line: { ...WORDMARK_LAYOUTS.line, steps: 18 },
 };
 
 export function Wordmark({
@@ -52,8 +26,8 @@ export function Wordmark({
   className?: string;
 }) {
   const w = LAYOUTS[layout];
-  const colours = trail(w.steps);
-  const at = (i: number) => `translate(${((EXTRUDE[0] * i) / w.steps).toFixed(2)} ${((EXTRUDE[1] * i) / w.steps).toFixed(2)})`;
+  const colours = wordmarkTrail(w.steps);
+  const at = (i: number) => wordmarkStep(i, w.steps);
   const keylineSteps = Array.from({ length: Math.floor(w.steps / 2) + 1 }, (_, k) => w.steps - k * 2);
   const extrudeSteps = Array.from({ length: w.steps }, (_, k) => w.steps - k);
   const L = `#${id}-l`;

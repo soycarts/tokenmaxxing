@@ -6,12 +6,12 @@ import { SourceIcons, sourceLabel } from "@/components/source-icons";
 import { Sparkline } from "@/components/sparkline";
 import type { ProfilePage } from "@/lib/data";
 import { siteUrl } from "@/lib/env";
-import { formatPct, formatRoi, formatTokens, formatUsd } from "@/lib/format";
+import { formatPct, formatRoi, formatTokens, formatUsd, roiOf } from "@/lib/format";
 import { PERIOD_LABEL, PERIODS } from "@/lib/periods";
 import { PROVIDER_LABEL, type Provider } from "@/lib/plans";
 
 export function ProfileView({ p }: { p: ProfilePage }) {
-  const roi = p.plan_period_usd > 0 ? p.api_equiv_usd / p.plan_period_usd : null;
+  const roi = roiOf(p.api_equiv_usd, p.plan_period_usd);
   const planList = Object.entries(p.plans ?? {});
   const unpriced = p.models.filter((m) => !m.priced);
   const base = siteUrl();
