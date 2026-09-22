@@ -136,7 +136,19 @@ export async function push(cfg: Config, opts: PushOptions = {}): Promise<number>
     if (res.status === 404) throw new SiteError(`${site} has no push endpoint yet (POST /api/v1/push returned 404). The site may not be live.`);
     if (res.status === 401 || res.status === 403) throw new SiteError(`${site} rejected the token (HTTP ${res.status}). Run \`tokenmaxxing link\` again.`);
     if (!res.ok) throw new SiteError(`${url} returned HTTP ${res.status}.`);
-    sent += batch.length;
+    let body: any = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* no body */
+    }
+    const rejected: unknown[] = Array.isArray(body?.rejected) ? body.rejected : [];
+    if (rejected.length) {
+      log(`Site rejected ${rejected.length} of ${batch.length} rows in this batch (kept the rest):`);
+      for (const r of rejected.slice(0, 5)) log(`  ${JSON.stringify(r)}`);
+      if (rejected.length > 5) log(`  …and ${rejected.length - 5} more`);
+    }
+    sent += batch.length - rejected.length;
     cfg.site.lastPushedTs = batch.at(-1)!.ts;
     saveConfig(cfg);
   }
