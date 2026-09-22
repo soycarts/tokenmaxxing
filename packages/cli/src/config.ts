@@ -1,0 +1,63 @@
+import { randomUUID } from 'node:crypto';
+import { files } from './paths.js';
+import { readJson, writeJsonAtomic, isFile } from './fsutil.js';
+import type { Provider, SourceName } from './types.js';
+
+export const DEFAULT_SITE = 'https://tokenmaxxing.fyi';
+
+export interface SourceConfig {
+  enabled: boolean;
+  paths: string[];
+}
+
+export interface Config {
+  version: 1;
+  deviceId: string;
+  sources: Record<SourceName, SourceConfig>;
+  plans: Partial<Record<Provider, string>>;
+  site: { url: string; token?: string; handle?: string; lastPushedTs?: string };
+}
+
+export function defaultConfig(): Config {
+  return {
+    version: 1,
+    deviceId: randomUUID(),
+    sources: {
+      claude: { enabled: false, paths: [] },
+      codex: { enabled: false, paths: [] },
+      gemini: { enabled: false, paths: [] },
+      cursor: { enabled: false, paths: [] },
+    },
+    plans: {},
+    site: { url: DEFAULT_SITE },
+  };
+}
+
+export function configExists(): boolean {
+  return isFile(files.config());
+}
+
+export function loadConfig(): Config {
+  const base = defaultConfig();
+  const raw = readJson<Partial<Config> | null>(files.config(), null);
+  if (!raw) return base;
+  return {
+    ...base,
+    ...raw,
+    version: 1,
+    deviceId: typeof raw.deviceId === 'string' && raw.deviceId ? raw.deviceId : base.deviceId,
+    sources: { ...base.sources, ...(raw.sources ?? {}) },
+    plans: { ...(raw.plans ?? {}) },
+    site: { ...base.site, ...(raw.site ?? {}) },
+  };
+}
+
+export function saveConfig(cfg: Config): void {
+  writeJsonAtomic(files.config(), cfg);
+}
+
+/** Site URL precedence: --site flag > TOKENMAXXING_SITE env > config.site.url > default. */
+export function siteUrl(cfg: Config, flag?: string): string {
+  const raw = flag || process.env.TOKENMAXXING_SITE || cfg.site.url || DEFAULT_SITE;
+  return raw.replace(/\/+$/, '');
+}
