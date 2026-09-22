@@ -1,0 +1,6 @@
+{
+  "claude": { "pro": 20, "max-5x": 100, "max-20x": 200 },
+  "openai": { "plus": 20, "pro": 200 },
+  "cursor": { "pro": 20, "pro-plus": 60, "ultra": 200 },
+  "google": { "ai-pro": 19.99, "ai-ultra-100": 100, "ai-ultra": 200 }
+}
