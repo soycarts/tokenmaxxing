@@ -95,7 +95,7 @@ Load the `frontend-design` skill before writing UI. A sibling of jobmaxxing.ai's
 
 - `npm run build` clean with no env.
 - `vitest` unit tests for: push validation (zod schema + hour rounding + caps), badge SVG generation, leaderboard metric SQL is exercised by a `supabase/schema.test.sql`-style script only if a DB is available (skip otherwise), link-code generator alphabet.
-- `scripts/seed-prices.mjs` reads `../../packages/cli/src/pricing/*.snapshot.json` + overrides and emits `supabase/seed_prices.sql` (upsert statements). Commit the generated SQL.
+- `scripts/seed-prices.mjs` reads `../../packages/cli/src/pricing/*.snapshot.json` + overrides and emits `supabase/seed_prices.sql` (upsert statements). Commit the generated SQL. A model listed at $0/$0 upstream gets no row (and the SQL deletes any stale one), so its tokens count as `unpriced_tokens`, matching the CLI.
 - Lighthouse-ish sanity: home page < 150KB JS.
 
 ## Out of scope v1

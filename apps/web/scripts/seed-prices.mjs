@@ -16,6 +16,10 @@
  * as unpriced: it gets no row, no alias resolves to it, and any stale row is deleted.
  *
  * Output rates are USD per token. Missing cache rates fall back to the input rate, never $0.
+ *
+ * An upstream entry listed at $0 input and $0 output is not a price (as in the CLI): it is skipped, so the
+ * model is priced by any other entry that has a real price, and otherwise gets no row (any stale row is
+ * deleted) and the site counts its tokens as unpriced_tokens. An override with a real price still wins.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -45,10 +49,13 @@ export function modelKey(model) {
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
 
+const zeroLitellm = (e) => !!e && e.input_cost_per_token === 0 && e.output_cost_per_token === 0;
+const zeroModelsDev = (e) => !!e?.cost && e.cost.input === 0 && e.cost.output === 0;
+
 function fromLitellm(entry) {
   const input = num(entry.input_cost_per_token);
   const output = num(entry.output_cost_per_token);
-  if (input === undefined || output === undefined) return null;
+  if (input === undefined || output === undefined || zeroLitellm(entry)) return null;
   const cacheWrite5m = num(entry.cache_creation_input_token_cost) ?? input;
   return {
     input,
@@ -61,7 +68,7 @@ function fromLitellm(entry) {
 
 function fromModelsDev(provider, entry) {
   const c = entry?.cost;
-  if (!c) return null;
+  if (!c || zeroModelsDev(entry)) return null;
   const input = num(c.input);
   const output = num(c.output);
   if (input === undefined || output === undefined) return null;
@@ -104,6 +111,18 @@ export function pinnedUnpriced(overrides = {}) {
   return out;
 }
 
+/**
+ * Keys (ids plus their normalised forms) of upstream entries listed at $0/$0 that `table` does not price
+ * some other way: they get no row, and toSql deletes any stale one.
+ */
+export function zeroListed({ litellm = {}, modelsdev = {} }, table) {
+  const ids = Object.entries(litellm).filter(([m, e]) => m !== "sample_spec" && zeroLitellm(e)).map(([m]) => m);
+  for (const block of Object.values(modelsdev)) {
+    for (const [m, e] of Object.entries(block?.models ?? {})) if (zeroModelsDev(e)) ids.push(m);
+  }
+  return new Set(ids.flatMap((m) => [m, modelKey(m)]).filter((k) => !table.has(k)));
+}
+
 /** Returns a Map model → rates, ordered by insertion precedence. */
 export function buildPriceTable({ litellm = {}, modelsdev = {}, overrides = {} }) {
   const table = new Map();
@@ -129,9 +148,10 @@ export function buildPriceTable({ litellm = {}, modelsdev = {}, overrides = {} }
 const lit = (n) => String(Number(n.toPrecision(12)));
 const q = (s) => `'${s.replaceAll("'", "''")}'`;
 
-export function toSql(table, snapshotDate, pinned = new Set()) {
+export function toSql(table, snapshotDate, pinned = new Set(), zero = new Set()) {
   const models = [...table.keys()].sort();
   const unpriced = [...pinned].sort();
+  const free = [...zero].filter((k) => !pinned.has(k)).sort();
   const lines = models.map((m) => {
     const r = table.get(m);
     return `  (${q(m)}, ${lit(r.input)}, ${lit(r.cache_read)}, ${lit(r.cache_write_5m)}, ${lit(r.cache_write_1h)}, ${lit(r.output)}, date ${q(snapshotDate)})`;
@@ -150,6 +170,9 @@ export function toSql(table, snapshotDate, pinned = new Set()) {
     "  snapshot_date = excluded.snapshot_date;",
     ...(unpriced.length
       ? ["", "-- Pinned as unpriced by overrides.json: never priced, even by a normalised match.", `delete from public.model_prices where model in (${unpriced.map(q).join(", ")});`]
+      : []),
+    ...(free.length
+      ? ["", "-- Listed at $0 input and $0 output upstream: not a price, so unpriced (counted in unpriced_tokens).", `delete from public.model_prices where model in (${free.map(q).join(", ")});`]
       : []),
     "",
   ].join("\n");
@@ -173,12 +196,12 @@ function snapshotDate() {
 
 export function generate() {
   const overrides = readJson(join(pricingDir, "overrides.json"), {});
-  const table = buildPriceTable({
+  const sources = {
     litellm: readJson(join(pricingDir, "litellm.snapshot.json"), {}),
     modelsdev: readJson(join(pricingDir, "modelsdev.snapshot.json"), {}),
-    overrides,
-  });
-  return toSql(table, snapshotDate(), pinnedUnpriced(overrides));
+  };
+  const table = buildPriceTable({ ...sources, overrides });
+  return toSql(table, snapshotDate(), pinnedUnpriced(overrides), zeroListed(sources, table));
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

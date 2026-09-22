@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildPriceTable, generate, modelKey, pinnedUnpriced, toSql } from "./seed-prices.mjs";
+import { buildPriceTable, generate, modelKey, pinnedUnpriced, toSql, zeroListed } from "./seed-prices.mjs";
 
 type Rates = { input: number; cache_read: number; cache_write_5m: number; cache_write_1h: number; output: number };
 
@@ -86,6 +86,40 @@ describe("seed-prices", () => {
     expect(t.has("openai/gpt-reserve")).toBe(true); // an exact id still resolves, as in the CLI
     const sql = toSql(t, "2026-09-22", pinnedUnpriced(overrides));
     expect(sql).toContain("delete from public.model_prices where model in ('gpt-reserve');");
+  });
+
+  it("treats a model listed at $0 input and $0 output upstream as unpriced: no row, stale row deleted", () => {
+    const zero = { input_cost_per_token: 0, output_cost_per_token: 0 };
+    const sources = {
+      litellm: {
+        "gemini-free-exp": zero,
+        "gemini/free-gemma": zero,
+        "google.free-gemma": { input_cost_per_token: 2.3e-7, output_cost_per_token: 3.8e-7 },
+        "gemini-overridden": zero,
+        "gemini-half-free": { input_cost_per_token: 0, output_cost_per_token: 1e-6 },
+      },
+      modelsdev: { google: { models: { "gemini-md-free": { cost: { input: 0, output: 0 } } } } },
+    };
+    const overrides = { "gemini-overridden": { input: 1, output: 2, source: "https://ai.google.dev/gemini-api/docs/pricing", added: "2026-09-22" } };
+    const t = buildPriceTable({ ...sources, overrides });
+    expect(t.has("gemini-free-exp")).toBe(false);
+    expect(t.has("gemini-md-free")).toBe(false);
+    expect(t.has("gemini/free-gemma")).toBe(false);
+    expect(t.get("free-gemma")).toMatchObject({ input: 2.3e-7 }); // the alias goes to the entry with a real price
+    expect(t.get("gemini-overridden")).toMatchObject({ input: 1e-6, output: 2e-6 }); // an override still wins
+    expect(t.get("gemini-half-free")).toMatchObject({ input: 0, output: 1e-6 }); // only both at 0 counts
+    for (const r of t.values()) expect(r.input + r.output).toBeGreaterThan(0);
+    const zero$ = zeroListed(sources, t);
+    expect([...zero$].sort()).toEqual(["gemini-free-exp", "gemini-md-free", "gemini/free-gemma"]);
+    const sql = toSql(t, "2026-09-22", pinnedUnpriced(overrides), zero$);
+    expect(sql).toContain("-- Listed at $0 input and $0 output upstream");
+    expect(sql).toContain("delete from public.model_prices where model in ('gemini-free-exp', 'gemini-md-free', 'gemini/free-gemma');");
+  });
+
+  it("the bundled seed has no $0/$0 row", () => {
+    const rows = [...generate().matchAll(/^  \('((?:[^']|'')+)', ([^,]+), [^,]+, [^,]+, [^,]+, ([^,]+), date/gm)];
+    expect(rows.length).toBeGreaterThan(100);
+    expect(rows.filter((m) => Number(m[2]) === 0 && Number(m[3]) === 0).map((m) => m[1])).toEqual([]);
   });
 
   it("never emits a priced row with a zero input and output rate from missing data", () => {
