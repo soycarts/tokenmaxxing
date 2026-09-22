@@ -69,3 +69,14 @@ test('resolution order: overrides > LiteLLM exact > models.dev exact (anthropic 
     _setTables({ litellm: undefined, modelsdev: undefined, overrides: undefined });
   }
 });
+
+test('bundled overrides pin codex-auto-review and gpt-reserve as unpriced with a note (no invented price)', async () => {
+  const { unpricedNote } = await import('../dist/pricing/index.js');
+  assert.equal(resolve('codex-auto-review'), null);
+  assert.equal(resolve('gpt-reserve'), null);
+  assert.equal(unpricedNote('codex-auto-review'), 'bundled reviewer, no list price');
+  assert.equal(unpricedNote('gpt-reserve'), 'bundled with Codex, no list price');
+  assert.equal(unpricedNote('gpt-6-astra'), undefined);
+  const ov = JSON.parse((await import('node:fs')).readFileSync(new URL('../src/pricing/overrides.json', import.meta.url), 'utf8'));
+  for (const e of Object.values(ov)) assert.deepEqual(Object.keys(e), ['unpriced']);
+});

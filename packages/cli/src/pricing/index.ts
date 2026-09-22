@@ -66,7 +66,10 @@ function fromModelsdev(provider: string, e: any): Rates | null {
   };
 }
 
-/** overrides.json: `{ "<model>": { input, output, cache_read?, cache_write_5m?, cache_write_1h? } }` in USD per MILLION tokens. */
+/**
+ * overrides.json: `{ "<model>": { input, output, cache_read?, cache_write_5m?, cache_write_1h? } }` in USD per MILLION tokens,
+ * or `{ "<model>": { "unpriced": "<note>" } }` to pin a model as unpriced with a note.
+ */
 function fromOverride(e: any): Rates | null {
   if (!e || !isNum(e.input) || !isNum(e.output)) return null;
   const input = e.input / 1e6;
@@ -139,9 +142,16 @@ export function resolve(model: string): Rates | null {
   return r;
 }
 
+/** Note for a model pinned as unpriced in overrides.json (e.g. bundled models with no list price). */
+export function unpricedNote(model: string): string | undefined {
+  const e = tables().overrides[model];
+  return e && typeof e.unpriced === 'string' ? e.unpriced : undefined;
+}
+
 function resolveUncached(model: string): Rates | null {
   const { litellm: ll, overrides: ov } = tables();
   if (ov[model]) {
+    if (typeof ov[model].unpriced === 'string') return null; // pinned unpriced: never fuzzy-match a price
     const r = fromOverride(ov[model]);
     if (r) return r;
   }

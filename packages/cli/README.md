@@ -78,6 +78,7 @@ Notes:
 - `--site` (or `TOKENMAXXING_SITE`) points `link`/`push` at another server, e.g. `http://localhost:3000`.
 - Custom prices: `src/pricing/overrides.json` in a checkout (`{ "<model>": { "input": 3, "output": 15,
   "cache_read": 0.3, "cache_write_5m": 3.75, "cache_write_1h": 6 } }`, USD per million tokens) wins over
-  the snapshots.
+  the snapshots; `{ "<model>": { "unpriced": "<note>" } }` keeps a model unpriced and shows the note (used for
+  Codex's bundled `codex-auto-review` and `gpt-reserve`, which have no list price).
 
 MIT licensed.

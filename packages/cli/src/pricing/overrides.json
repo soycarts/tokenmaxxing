@@ -1,1 +1,4 @@
-{}
+{
+  "codex-auto-review": { "unpriced": "bundled reviewer, no list price" },
+  "gpt-reserve": { "unpriced": "bundled with Codex, no list price" }
+}

@@ -105,3 +105,17 @@ test('schedule definitions run sync every 30 minutes', () => {
 test('lineDiff marks additions and removals', () => {
   assert.equal(lineDiff('a\nb\n', 'a\nc\n'), '  a\n- b\n+ c');
 });
+
+test('report lists unpriced models with their override note', async () => {
+  const { buildReport, renderReport } = await import('../dist/report.js');
+  const { defaultConfig } = await import('../dist/config.js');
+  const now = new Date();
+  const ts = new Date(now.getTime() - 3600e3).toISOString().slice(0, 13) + ':00:00Z';
+  const rows = [{ ...emptyBucket(ts, 'codex', 'codex-auto-review'), input: 1000 }, { ...emptyBucket(ts, 'codex', 'mystery-model'), input: 5 }];
+  const rep = buildReport(rows, parsePeriod('7d', now), defaultConfig());
+  assert.deepEqual(rep.unpriced, [
+    { source: 'codex', model: 'codex-auto-review', tokens: 1000, note: 'bundled reviewer, no list price' },
+    { source: 'codex', model: 'mystery-model', tokens: 5 },
+  ]);
+  assert.match(renderReport(rep), /Unpriced models \(0 tokens counted toward \$\): codex\/codex-auto-review \(1\.0k tokens — bundled reviewer, no list price\), codex\/mystery-model \(5 tokens\)/);
+});

@@ -2,7 +2,7 @@ import type { Config } from './config.js';
 import { fmtPrice, fmtTokens, fmtUsd, localDate, table } from './format.js';
 import { inPeriod, type Period } from './period.js';
 import { planPrice, PROVIDERS, roi, sourceFor } from './plans.js';
-import { cost, resolve, SNAPSHOT_DATE } from './pricing/index.js';
+import { cost, resolve, SNAPSHOT_DATE, unpricedNote } from './pricing/index.js';
 import { COUNT_FIELDS, type Bucket, type Provider, type SourceName } from './types.js';
 
 export type GroupBy = 'source-model' | 'model' | 'source' | 'day';
@@ -41,7 +41,7 @@ export interface Report {
   rows: ReportRow[];
   totals: Omit<ReportRow, 'source' | 'model' | 'day'> & { cost: number };
   plans: PlanLine[];
-  unpriced: { source: SourceName; model: string; tokens: number }[];
+  unpriced: { source: SourceName; model: string; tokens: number; note?: string }[];
   excluded: { source: SourceName; reason: string }[];
 }
 
@@ -57,7 +57,7 @@ function zeroRow(): ReportRow {
 
 export function buildReport(buckets: Iterable<Bucket>, period: Period, cfg: Config, by: GroupBy = 'source-model'): Report {
   const groups = new Map<string, ReportRow>();
-  const unpriced = new Map<string, { source: SourceName; model: string; tokens: number }>();
+  const unpriced = new Map<string, Report['unpriced'][number]>();
   const costBySource = new Map<SourceName, number>();
   const totals = { ...zeroRow(), cost: 0 };
 
@@ -93,7 +93,11 @@ export function buildReport(buckets: Iterable<Bucket>, period: Period, cfg: Conf
       row.unpriced_tokens += t;
       totals.unpriced_tokens += t;
       const uk = `${b.source}|${b.model}`;
-      const u = unpriced.get(uk) ?? { source: b.source, model: b.model, tokens: 0 };
+      let u = unpriced.get(uk);
+      if (!u) {
+        const note = unpricedNote(b.model);
+        u = { source: b.source, model: b.model, tokens: 0, ...(note ? { note } : {}) };
+      }
       u.tokens += t;
       unpriced.set(uk, u);
     }
@@ -204,7 +208,7 @@ export function renderReport(rep: Report): string {
       .forEach((l, i) => out.push((i === 0 ? 'Plans:  ' : '        ') + l));
   }
   const up = rep.unpriced.length
-    ? rep.unpriced.map((u) => `${u.source}/${u.model} (${fmtTokens(u.tokens)} tokens)`).join(', ')
+    ? rep.unpriced.map((u) => `${u.source}/${u.model} (${fmtTokens(u.tokens)} tokens${u.note ? ` — ${u.note}` : ''})`).join(', ')
     : 'none';
   out.push(`Unpriced models (0 tokens counted toward $): ${up}`);
   for (const e of rep.excluded) out.push(`${cap(e.source)}: detected — ${e.reason}`);
