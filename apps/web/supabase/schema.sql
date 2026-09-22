@@ -751,3 +751,6 @@ grant execute on function public.site_stats() to anon, authenticated;
 grant execute on function public.profile_page(text, text) to anon, authenticated;
 grant execute on function public.badge_stats(text, text) to anon, authenticated;
 grant execute on function public.org_page(text, text) to anon, authenticated;
+
+-- Tell PostgREST to pick up new functions and grants now rather than on its next poll.
+notify pgrst, 'reload schema';
