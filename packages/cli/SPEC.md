@@ -58,7 +58,7 @@ Each exports `parse(ctx): Promise<Bucket[]>` where ctx gives paths, cursors, and
   ```
 - Map: input←input_tokens, cache_read←cache_read_input_tokens, cache_write_5m←cache_creation.ephemeral_5m_input_tokens, cache_write_1h←cache_creation.ephemeral_1h_input_tokens. If `cache_creation` absent, cache_write_5m←cache_creation_input_tokens. If `cache_creation` is present but 5m+1h ≠ `cache_creation_input_tokens` (seen on model-fallback responses, where the split describes the first iteration and the totals the last), `cache_creation_input_tokens` is the total and the split's 5m/1h ratio is applied to it (keeps token totals equal to ccusage). output←output_tokens. reasoning←0 (Claude does not report it separately; do NOT subtract). requests←1.
 - Skip lines where `message.model` is `<synthetic>` or missing, or usage is all zeros.
-- **Dedup key** = `${message.id}:${requestId ?? ''}` (ccusage rule). Keep a bounded Set (last 200k keys, LRU by insertion) in `cursors.json`. Same message.id appearing in a subagent file AND the parent counts once.
+- **Dedup key** = `${message.id}:${requestId ?? ''}`. On a repeat key, **replace** the earlier contribution when the new line's total tokens (input+cache_read+cache_write_5m+cache_write_1h+output) is larger, otherwise ignore the line; the hour bucket and model are the ones from the line that wins, and the replaced contribution is subtracted from its hour (requests stay 1 per key). Reason: Claude Code writes one API message as several lines (thinking / text / tool_use blocks) sharing `message.id` and `requestId`, and later lines carry the cumulative usage for the whole message, so the largest total is the billed usage. This diverges from ccusage (which keeps the first line and so undercounts output) **by design**. Keep a bounded Set (last 200k keys, LRU by insertion) in `cursors.json`, plus the full contribution (hour, model, token counts) for the most recent 10k keys so a message split across two syncs, or repeated in a later file, can still be replaced; a repeat of an older key whose contribution is no longer kept is ignored. Messages without `message.id` are not deduped. Same message.id appearing in a subagent file AND the parent counts once.
 - conversations: count `type=="user"` lines whose `message.content` is a string or contains a text block, deduped by `uuid` (bounded 200k set in `cursors.json`), excluding files under `/subagents/`. Each is attributed to the model of the next assistant usage line in the same file (held in the file cursor until one arrives).
 - Hour bucket from `timestamp` (UTC, floor to hour).
 
@@ -121,7 +121,7 @@ Numbers formatted with k/M/B; `--json` emits `{ period, rows:[...], totals, plan
 
 ## verify
 
-If `ccusage` is on PATH: run `ccusage daily --since YYYYMMDD --json`, then `sync`, and compare per-model input/output/cacheCreation/cacheRead totals with our claude buckets over the same **local** calendar days (ccusage 15.x groups by local date and has no timezone flag; hourly buckets map exactly onto local days in whole-hour time zones), print a table with deltas and a pass/fail at 1% tolerance on tokens. Cost will differ (ccusage prices all cache writes at the 5m rate); print both and say why. If ccusage is missing, say how to install it and exit 0.
+If `ccusage` is on PATH: run `ccusage daily --since YYYYMMDD --json`, then `sync`, and compare per-model input/output/cacheCreation/cacheRead totals with our claude buckets over the same **local** calendar days (ccusage 15.x groups by local date and has no timezone flag; hourly buckets map exactly onto local days in whole-hour time zones), print a table with deltas and a pass/fail at 1% tolerance on input, cache_read and cache_write (per model and in total). Output is shown as an informational line, expected higher than ccusage because tokenmaxxing counts the final usage of multi-line messages (see Dedup key); it does not affect pass/fail. Cost will differ (ccusage prices all cache writes at the 5m rate); print both and say why. If ccusage is missing, say how to install it and exit 0.
 
 ## link / push
 
@@ -142,6 +142,6 @@ Create `test/fixtures/claude/session.jsonl` (≈30 lines), `test/fixtures/claude
 ## Done means
 
 - `npm run build && npm test` green.
-- `node dist/cli.js init` on this machine finishes < 60s over 6.4k Claude files + Codex, prints a report whose Claude totals `verify` confirms within 1% of ccusage for the last 30 days.
+- `node dist/cli.js init` on this machine finishes < 60s over 6.4k Claude files + Codex, prints a report whose Claude input/cache totals `verify` confirms within 1% of ccusage for the last 30 days (output is higher by design).
 - `npm pack` produces a tarball < 1.5MB with no deps.
 - README.md in the package: the onboarding prompt at the top, privacy statement, commands.
