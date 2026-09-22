@@ -1,5 +1,6 @@
 import { createProfile } from "@/app/me/actions";
 import { inputClass, primaryButtonClass } from "@/components/form";
+import { SubmitButton } from "@/components/submit-button";
 
 /** Picking a handle creates the profile. It is permanent, so the form says so. */
 export function HandleForm({ suggestion, next }: { suggestion: string; next: string }) {
@@ -26,9 +27,9 @@ export function HandleForm({ suggestion, next }: { suggestion: string; next: str
           spellCheck={false}
           className={`${inputClass} code-cond`}
         />
-        <button type="submit" className={primaryButtonClass}>
+        <SubmitButton pendingLabel="Saving…" className={primaryButtonClass}>
           Save handle
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

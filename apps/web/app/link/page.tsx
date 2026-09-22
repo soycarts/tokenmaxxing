@@ -4,6 +4,7 @@ import { inputClass, primaryButtonClass, buttonClass } from "@/components/form";
 import { HandleForm } from "@/components/handle-form";
 import { NotConfigured } from "@/components/not-configured";
 import { SignInButton } from "@/components/sign-in";
+import { SubmitButton } from "@/components/submit-button";
 import { suggestHandle } from "@/lib/handles";
 import { normalizeLinkCode } from "@/lib/link-code";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -113,9 +114,9 @@ export default async function LinkPage({ searchParams }: { searchParams: Promise
             <span className="text-sm text-muted">Device name</span>
             <input name="name" defaultValue="laptop" maxLength={64} className={`${inputClass} mt-1 max-w-xs`} />
           </label>
-          <button type="submit" className={`${primaryButtonClass} mt-5`}>
+          <SubmitButton pendingLabel="Linking…" className={`${primaryButtonClass} mt-5`}>
             Link this device
-          </button>
+          </SubmitButton>
         </form>
       )}
     </Shell>

@@ -13,7 +13,11 @@ export const SOURCES = ["claude", "codex", "gemini", "cursor"] as const;
 export type Source = (typeof SOURCES)[number];
 
 export const MAX_ROWS = 5000;
-export const ROW_TOKEN_CAP = 50_000_000;
+/**
+ * Per (hour, source, model) row. Cache reads dominate: one developer running parallel agents
+ * was measured at 575M tokens in a single hour, so the cap is a sanity bound, not a budget.
+ */
+export const ROW_TOKEN_CAP = 2_000_000_000;
 export const FUTURE_SLACK_MS = 5 * 60 * 1000;
 const HOUR_MS = 3_600_000;
 const INT32_MAX = 2_147_483_647;

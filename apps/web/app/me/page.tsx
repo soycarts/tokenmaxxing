@@ -5,6 +5,7 @@ import { buttonClass, dangerButtonClass, inputClass, primaryButtonClass } from "
 import { HandleForm } from "@/components/handle-form";
 import { NotConfigured } from "@/components/not-configured";
 import { SignInButton } from "@/components/sign-in";
+import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/format";
 import { suggestHandle } from "@/lib/handles";
 import { PLANS, PROVIDER_LABEL, PROVIDERS, type Plans } from "@/lib/plans";
@@ -105,9 +106,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
           </div>
           <form action={setPublic}>
             <input type="hidden" name="public" value={profile.public ? "false" : "true"} />
-            <button type="submit" className={profile.public ? buttonClass : primaryButtonClass}>
-              {profile.public ? "Make private" : "Make public"}
-            </button>
+            <SubmitButton className={profile.public ? buttonClass : primaryButtonClass}>{profile.public ? "Make private" : "Make public"}</SubmitButton>
           </form>
         </div>
       </Block>
@@ -128,9 +127,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
             </label>
           ))}
           <div className="sm:col-span-2">
-            <button type="submit" className={primaryButtonClass}>
-              Save plans
-            </button>
+            <SubmitButton className={primaryButtonClass}>Save plans</SubmitButton>
           </div>
         </form>
       </Block>
@@ -151,7 +148,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
                     <input type="hidden" name="id" value={d.id} />
                     <label className="sr-only" htmlFor={`name-${d.id}`}>Device name</label>
                     <input id={`name-${d.id}`} name="name" defaultValue={d.name} maxLength={64} className={`${inputClass} max-w-xs`} />
-                    <button type="submit" className={buttonClass}>Rename</button>
+                    <SubmitButton className={buttonClass}>Rename</SubmitButton>
                   </form>
                   <div className="flex items-center justify-between gap-4 sm:justify-end">
                     <p className="text-sm text-muted">
@@ -161,7 +158,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
                     {on && admin && (
                       <form action={revokeDevice}>
                         <input type="hidden" name="id" value={d.id} />
-                        <button type="submit" className={dangerButtonClass}>Revoke</button>
+                        <SubmitButton className={dangerButtonClass}>Revoke</SubmitButton>
                       </form>
                     )}
                   </div>
@@ -186,7 +183,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
                 </div>
                 <form action={leaveOrg}>
                   <input type="hidden" name="slug" value={o.slug} />
-                  <button type="submit" className={buttonClass}>Leave</button>
+                  <SubmitButton className={buttonClass}>Leave</SubmitButton>
                 </form>
               </li>
             ))}
@@ -207,7 +204,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
               <input type="checkbox" name="public" defaultChecked className="accent-[var(--amber)]" />
               Show on the org leaderboard
             </label>
-            <button type="submit" className={primaryButtonClass}>Create org</button>
+            <SubmitButton className={primaryButtonClass}>Create org</SubmitButton>
           </form>
           <form action={joinOrg} className="space-y-3">
             <p className="font-semibold">Join with an invite code</p>
@@ -215,7 +212,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
               <span className="text-sm text-muted">Invite code</span>
               <input name="code" required maxLength={16} spellCheck={false} autoCapitalize="characters" className={`${inputClass} mt-1 code-cond uppercase`} />
             </label>
-            <button type="submit" className={buttonClass}>Join org</button>
+            <SubmitButton className={buttonClass}>Join org</SubmitButton>
           </form>
         </div>
       </Block>
@@ -223,7 +220,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
       <Block title="Session">
         <div className="flex flex-col gap-8 md:flex-row md:justify-between">
           <form action="/auth/signout" method="post">
-            <button type="submit" className={buttonClass}>Sign out</button>
+            <SubmitButton className={buttonClass}>Sign out</SubmitButton>
           </form>
           {admin && (
             <form action={deleteAccount} className="max-w-sm space-y-2">
@@ -233,7 +230,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
               </label>
               <div className="flex gap-2">
                 <input id="confirm" name="confirm" autoComplete="off" spellCheck={false} className={`${inputClass} code-cond`} />
-                <button type="submit" className={dangerButtonClass}>Delete account</button>
+                <SubmitButton className={dangerButtonClass}>Delete account</SubmitButton>
               </div>
             </form>
           )}
