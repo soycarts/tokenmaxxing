@@ -27,7 +27,7 @@ function Glyph({ source }: { source: string }) {
 export function SourceIcons({ sources }: { sources: string[] | null | undefined }) {
   if (!sources?.length) return null;
   return (
-    <span className="inline-flex items-center gap-1.5 text-muted">
+    <span className="inline-flex items-center gap-1.5 text-ink-2">
       {sources.map((s) => (
         <svg key={s} viewBox="0 0 16 16" width="14" height="14" stroke="currentColor" role="img" aria-label={LABEL[s] ?? s}>
           <title>{LABEL[s] ?? s}</title>
