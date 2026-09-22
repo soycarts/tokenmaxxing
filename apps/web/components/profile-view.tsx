@@ -60,6 +60,10 @@ export function ProfileView({ p }: { p: ProfilePage }) {
         <div className="sticker mt-4 px-4 pb-3 pt-5 sm:px-6">
           <Sparkline days={p.daily} />
         </div>
+        {p.granularity === "day" && <p className="mt-3 text-sm text-ink-2">Uploads are daily totals.</p>}
+        {p.granularity === "week" && (
+          <p className="mt-3 text-sm text-ink-2">Uploads are weekly totals, each drawn on the Monday its week starts.</p>
+        )}
       </section>
 
       <section aria-labelledby="models" className="mt-14">

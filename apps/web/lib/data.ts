@@ -67,6 +67,8 @@ export type ProfilePage = {
   cache_read_ratio: number;
   unpriced_tokens: number;
   sources: string[];
+  /** How coarse the latest push was. Absent before the v0.2 schema is applied. */
+  granularity?: "hour" | "day" | "week";
   models: ProfileModel[];
   daily: { day: string; usd: number; tokens: number }[];
 };
