@@ -47,11 +47,11 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
     return (
       <Shell>
         {flash}
-        <p className="mt-6 max-w-[56ch] text-lg text-muted">
+        <p className="mt-6 max-w-[56ch] text-lg text-ink-2">
           Sign in to link devices, set your plans for ROI, and choose whether your profile is public. We use your GitHub account
           for identity only.
         </p>
-        <div className="mt-6">
+        <div className="mt-8">
           <SignInButton next="/me" />
         </div>
       </Shell>
@@ -94,11 +94,11 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p>
-              <Link href={`/u/${profile.handle}`} className="code-cond text-paper underline">
+              <Link href={`/u/${profile.handle}`} className="font-mono font-semibold text-ink underline">
                 /u/{profile.handle}
               </Link>
             </p>
-            <p className="mt-1 text-sm text-muted">
+            <p className="mt-1 text-sm text-ink-2">
               {profile.public
                 ? "Public: on leaderboards, badges and your profile page."
                 : "Private: only you can see your profile. You are not on any leaderboard."}
@@ -115,7 +115,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
         <form action={savePlans} className="grid gap-4 sm:grid-cols-2">
           {PROVIDERS.map((provider) => (
             <label key={provider} className="block">
-              <span className="text-sm text-muted">{PROVIDER_LABEL[provider]}</span>
+              <span className="text-sm font-semibold">{PROVIDER_LABEL[provider]}</span>
               <select name={`plan_${provider}`} defaultValue={profile.plans?.[provider] ?? ""} className={`${inputClass} mt-1`}>
                 <option value="">None</option>
                 {Object.entries(PLANS[provider]).map(([plan, usd]) => (
@@ -134,12 +134,12 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
 
       <Block title="Devices" note="Each machine you linked with the CLI. Revoking stops future pushes; past usage stays.">
         {!devices?.length ? (
-          <p className="text-muted">
-            No devices linked yet. Run <code className="code-cond text-paper">npx tokenmaxxing-cli link</code> in a terminal and
+          <p className="text-ink-2">
+            No devices linked yet. Run <code className="font-mono text-[0.9em] text-ink">npx tokenmaxxing-cli link</code> in a terminal and
             open the URL it prints.
           </p>
         ) : (
-          <ul className="divide-y divide-line border-y border-line">
+          <ul className="divide-y-2 divide-line border-y-2 border-line">
             {(devices as Device[]).map((d) => {
               const on = !admin || active.has(d.id);
               return (
@@ -151,9 +151,9 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
                     <SubmitButton className={buttonClass}>Rename</SubmitButton>
                   </form>
                   <div className="flex items-center justify-between gap-4 sm:justify-end">
-                    <p className="text-sm text-muted">
+                    <p className="text-sm text-ink-2">
                       {on ? "Last push " : "Revoked. Last push "}
-                      <span className="num text-paper">{formatDate(d.last_push_at)}</span>
+                      <span className="num font-semibold text-ink">{formatDate(d.last_push_at)}</span>
                     </p>
                     {on && admin && (
                       <form action={revokeDevice}>
@@ -171,14 +171,14 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
 
       <Block title="Orgs" note="Your totals count toward every org you are in. Members see each other; outsiders see public members only.">
         {(orgs as MyOrg[] | null)?.length ? (
-          <ul className="mb-6 divide-y divide-line border-y border-line">
+          <ul className="mb-8 divide-y-2 divide-line border-y-2 border-line">
             {(orgs as MyOrg[]).map((o) => (
               <li key={o.slug} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <Link href={`/orgs/${o.slug}`} className="font-semibold underline">{o.name}</Link>
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-ink-2">
                     {o.role === "owner" ? "Owner" : "Member"}, {o.member_count} {o.member_count === 1 ? "member" : "members"},{" "}
-                    {o.public ? "public" : "private"}. Invite code <span className="num text-paper">{o.invite_code}</span>
+                    {o.public ? "public" : "private"}. Invite code <span className="font-mono font-semibold text-ink">{o.invite_code}</span>
                   </p>
                 </div>
                 <form action={leaveOrg}>
@@ -191,26 +191,26 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
         ) : null}
         <div className="grid gap-8 md:grid-cols-2">
           <form action={createOrg} className="space-y-3">
-            <p className="font-semibold">Start an org</p>
+            <p className="display text-2xl">Start an org</p>
             <label className="block">
-              <span className="text-sm text-muted">Name</span>
+              <span className="text-sm font-semibold">Name</span>
               <input name="name" required maxLength={64} className={`${inputClass} mt-1`} />
             </label>
             <label className="block">
-              <span className="text-sm text-muted">URL, /orgs/…</span>
-              <input name="slug" maxLength={32} pattern="[a-z0-9\-]{2,32}" placeholder="from the name" spellCheck={false} className={`${inputClass} mt-1 code-cond`} />
+              <span className="text-sm font-semibold">URL, /orgs/…</span>
+              <input name="slug" maxLength={32} pattern="[a-z0-9\-]{2,32}" placeholder="from the name" spellCheck={false} className={`${inputClass} mt-1 font-mono`} />
             </label>
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <input type="checkbox" name="public" defaultChecked className="accent-[var(--amber)]" />
+            <label className="flex items-center gap-2 text-sm text-ink-2">
+              <input type="checkbox" name="public" defaultChecked className="h-4 w-4 accent-[var(--accent)]" />
               Show on the org leaderboard
             </label>
             <SubmitButton className={primaryButtonClass}>Create org</SubmitButton>
           </form>
           <form action={joinOrg} className="space-y-3">
-            <p className="font-semibold">Join with an invite code</p>
+            <p className="display text-2xl">Join with an invite code</p>
             <label className="block">
-              <span className="text-sm text-muted">Invite code</span>
-              <input name="code" required maxLength={16} spellCheck={false} autoCapitalize="characters" className={`${inputClass} mt-1 code-cond uppercase`} />
+              <span className="text-sm font-semibold">Invite code</span>
+              <input name="code" required maxLength={16} spellCheck={false} autoCapitalize="characters" className={`${inputClass} mt-1 font-mono uppercase`} />
             </label>
             <SubmitButton className={buttonClass}>Join org</SubmitButton>
           </form>
@@ -224,12 +224,12 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
           </form>
           {admin && (
             <form action={deleteAccount} className="max-w-sm space-y-2">
-              <label htmlFor="confirm" className="block text-sm text-muted">
+              <label htmlFor="confirm" className="block text-sm text-ink-2">
                 Delete your account, devices and every pushed row. Orgs you own go too. Type{" "}
-                <span className="code-cond text-paper">{profile.handle}</span> to confirm.
+                <span className="font-mono font-semibold text-ink">{profile.handle}</span> to confirm.
               </label>
               <div className="flex gap-2">
-                <input id="confirm" name="confirm" autoComplete="off" spellCheck={false} className={`${inputClass} code-cond`} />
+                <input id="confirm" name="confirm" autoComplete="off" spellCheck={false} className={`${inputClass} font-mono`} />
                 <SubmitButton className={dangerButtonClass}>Delete account</SubmitButton>
               </div>
             </form>
@@ -242,8 +242,8 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
 
 function Shell({ children, handle }: { children: React.ReactNode; handle?: string }) {
   return (
-    <div className="mx-auto max-w-4xl px-4 pt-12 sm:px-6 md:pt-16">
-      <h1 className="mb-6 text-4xl font-extrabold tracking-[-0.03em] sm:text-5xl">{handle ? `@${handle}` : "Account"}</h1>
+    <div className="mx-auto max-w-4xl px-4 pt-10 sm:px-6 md:pt-14">
+      <h1 className="display mb-6 break-words text-[3.4rem] sm:text-7xl">{handle ? `@${handle}` : "Account"}</h1>
       {children}
     </div>
   );
@@ -251,10 +251,10 @@ function Shell({ children, handle }: { children: React.ReactNode; handle?: strin
 
 function Block({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section className="mt-12">
-      <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-      {note && <p className="mt-1 max-w-[64ch] text-sm text-muted">{note}</p>}
-      <div className="mt-4">{children}</div>
+    <section className="sticker mt-10 px-5 py-6 sm:px-7">
+      <h2 className="display text-3xl">{title}</h2>
+      {note && <p className="mt-1.5 max-w-[64ch] text-sm text-ink-2">{note}</p>}
+      <div className="mt-5">{children}</div>
     </section>
   );
 }

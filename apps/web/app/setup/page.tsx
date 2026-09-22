@@ -48,21 +48,21 @@ export default function SetupPage() {
           branches or credentials. The tracker never reads credential files.
         </p>
       </Section>
-      <div className="mt-6 max-w-4xl overflow-hidden rounded-md border border-line">
+      <div className="sticker mt-6 max-w-4xl overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="hidden bg-raised text-left text-muted sm:table-header-group">
+          <thead className="hidden bg-band text-left text-on-band sm:table-header-group">
             <tr>
-              <th scope="col" className="px-4 py-2.5 font-medium">Field</th>
-              <th scope="col" className="px-4 py-2.5 font-medium">Example</th>
-              <th scope="col" className="px-4 py-2.5 font-medium">What it is</th>
+              <th scope="col" className="display px-4 py-3 text-sm font-normal tracking-[0.05em]">Field</th>
+              <th scope="col" className="display px-4 py-3 text-sm font-normal tracking-[0.05em]">Example</th>
+              <th scope="col" className="display px-4 py-3 text-sm font-normal tracking-[0.05em]">What it is</th>
             </tr>
           </thead>
           <tbody>
             {UPLOADED.map(([field, example, what]) => (
-              <tr key={field} className="grid gap-1 border-t border-line px-4 py-3 first:border-t-0 sm:table-row sm:px-0 sm:py-0 sm:first:border-t">
-                <td className="code-cond text-[0.8rem] text-paper sm:px-4 sm:py-2.5">{field}</td>
-                <td className="num text-[0.78rem] text-muted sm:px-4 sm:py-2.5">{example}</td>
-                <td className="text-muted sm:px-4 sm:py-2.5">{what}</td>
+              <tr key={field} className="grid gap-1 border-t-2 border-line px-4 py-3.5 first:border-t-0 sm:table-row sm:px-0 sm:py-0">
+                <td className="font-mono text-[0.8rem] font-semibold text-ink sm:px-4 sm:py-3">{field}</td>
+                <td className="num font-mono text-[0.78rem] text-ink-2 sm:px-4 sm:py-3">{example}</td>
+                <td className="text-ink-2 sm:px-4 sm:py-3">{what}</td>
               </tr>
             ))}
           </tbody>
@@ -79,7 +79,7 @@ export default function SetupPage() {
       </Section>
 
       <Section title="Uninstall" id="uninstall">
-        <ol className="list-decimal space-y-2 pl-5">
+        <ol className="list-decimal space-y-2 pl-5 marker:font-bold marker:text-ink">
           <li>
             <Code>npx tokenmaxxing-cli hook uninstall</Code> and <Code>npx tokenmaxxing-cli schedule uninstall</Code>, if you
             installed either.
@@ -88,7 +88,7 @@ export default function SetupPage() {
             Delete the local data: <Code>rm -rf ~/.tokenmaxxing</Code>.
           </li>
           <li>
-            If you linked a device, revoke it on your <Link href="/me" className="text-paper underline">account page</Link> and
+            If you linked a device, revoke it on your <Link href="/me" className="font-semibold text-ink underline">account page</Link> and
             make your profile private.
           </li>
         </ol>
