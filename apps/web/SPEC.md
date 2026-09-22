@@ -75,7 +75,14 @@ API (all JSON, `app/api/v1/...`)
 
 ## Design
 
-Load the `frontend-design` skill before writing UI. Dark-first, monospace numerals, one accent colour, no template look. Mobile: 16px gutters, no horizontal scroll. Tables collapse to cards under 640px. Use inline SVG for sparklines and badge. No component library.
+Load the `frontend-design` skill before writing UI. A sibling of jobmaxxing.ai's "GUMDROP" identity, bold rather than quiet:
+
+- Tokens as CSS variables in `app/globals.css`, mapped into Tailwind's `@theme`. Light-first: Milk `#fffdf7` paper, Liquorice `#211d2e` ink, Sour Cherry `#c2136b` for primary actions. Dark is "Blackcurrant" (`#1c1826` / `#2a2438`, accent `#ff7ec4`), chosen by `data-theme` on `<html>` (a stored choice from the header toggle) or, with no choice, `prefers-color-scheme`; a head script sets it before first paint so there is no flash.
+- The site's own colour is butterscotch gold (`#f5b82e`, `#ffd060` on dark) for value; the candy stage colours (bubblegum, apricot, butter, mint, periwinkle) mark the four leaderboard tabs.
+- Anton (self-hosted from `public/fonts`, never hotlinked), uppercase with tight leading, for headlines, section heads, tabs, buttons and big numbers. Body copy stays in a readable system sans with tabular numerals; commands and prompts in the system monospace.
+- A mascot in jobmaxxing's sticker construction (blob silhouette, white keyline, ink contour, two tall oval eyes with a catchlight, blush, gloss), gold, as an inline SVG component with three expressions: idle, smug (the Volume board, not-found) and happy (a good ROI, a linked device). It appears in the header mark, the hero, empty states, the badge and the favicon (`app/icon.svg`). The "TOKENMAXXING" wordmark is Anton outlines in inline SVG with the mascot peeking over it.
+- Chips, buttons and panels are stickers: a thick ink keyline and a hard offset shadow that collapses on press.
+- Mobile: 16px gutters, no horizontal scroll. Tables collapse to cards under 640px. Inline SVG for sparklines, badge, mascot and wordmark. No component library, no chart library.
 
 ## Tests / verification
 
