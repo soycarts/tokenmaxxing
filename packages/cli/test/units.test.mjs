@@ -1,0 +1,107 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { writeFileSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fmtTokens, fmtUsd } from '../dist/format.js';
+import { roi, MONTH_DAYS } from '../dist/plans.js';
+import { parsePeriod } from '../dist/period.js';
+import { loadBuckets, compactBuckets, appendBuckets } from '../dist/store.js';
+import { emptyBucket, hourOf } from '../dist/bucket.js';
+import { BoundedSet } from '../dist/dedup.js';
+import { planPush, PUSH_BATCH, linkCode } from '../dist/site.js';
+import { addCodexNotify, removeCodexNotify, addClaudeHook, removeClaudeHook } from '../dist/hook.js';
+import { launchdPlist, cronLine } from '../dist/schedule.js';
+import { lineDiff } from '../dist/prompt.js';
+import { tmp } from './helpers.mjs';
+
+test('number formatting', () => {
+  assert.equal(fmtTokens(950), '950');
+  assert.equal(fmtTokens(2900), '2.9k');
+  assert.equal(fmtTokens(317_500_000), '317.5M');
+  assert.equal(fmtTokens(23_080_000_000), '23.1B');
+  assert.equal(fmtUsd(4476.25), '$4,476.25');
+  assert.equal(fmtUsd(0.5), '$0.50');
+});
+
+test('ROI prorates the monthly price to the period', () => {
+  assert.equal(MONTH_DAYS, 30.4375);
+  assert.ok(Math.abs(roi(4360, 200, 30) - 4360 / ((200 * 30) / 30.4375)) < 1e-12);
+});
+
+test('periods use local calendar days', () => {
+  const now = new Date(2026, 8, 22, 13, 0, 0);
+  const p = parsePeriod('30d', now);
+  assert.equal(p.sinceDate, '2026-08-23');
+  assert.equal(p.untilDate, '2026-09-22');
+  assert.equal(p.days, 30);
+  assert.equal(parsePeriod('2026-09-15', now).days, 7);
+  assert.throws(() => parsePeriod('lastweek', now));
+});
+
+test('hourOf floors to the UTC hour', () => {
+  assert.equal(hourOf('2026-09-22T13:59:59.999Z'), '2026-09-22T13:00:00Z');
+  assert.equal(hourOf('nope'), null);
+});
+
+test('buckets: last row per key wins; compaction keeps only those', async () => {
+  const dir = tmp();
+  const path = join(dir, 'buckets.jsonl');
+  const a = { ...emptyBucket('2026-09-22T13:00:00Z', 'claude', 'm'), input: 1 };
+  const b = { ...a, input: 5 };
+  const c = { ...emptyBucket('2026-09-22T14:00:00Z', 'codex', 'x'), output: 2 };
+  appendBuckets([a, c], path);
+  appendBuckets([b], path);
+  writeFileSync(path, readFileSync(path, 'utf8') + 'not json\n');
+  const loaded = await loadBuckets(path);
+  assert.equal(loaded.rows.size, 2);
+  assert.equal(loaded.rows.get('2026-09-22T13:00:00Z|claude|m').input, 5);
+  assert.equal(loaded.bad, 1);
+  compactBuckets(loaded.rows, path);
+  const again = await loadBuckets(path);
+  assert.equal(again.lines, 2);
+  assert.equal(again.rows.get('2026-09-22T13:00:00Z|claude|m').input, 5);
+});
+
+test('BoundedSet evicts least-recently-seen keys', () => {
+  const s = new BoundedSet(3);
+  for (const k of ['a', 'b', 'c']) s.add(k);
+  assert.equal(s.add('a'), false); // refresh
+  s.add('d');
+  assert.deepEqual(s.toJSON(), ['c', 'a', 'd']);
+});
+
+test('push batches at 5000 rows and filters by lastPushedTs', () => {
+  const rows = [];
+  for (let i = 0; i < 12001; i++) rows.push(emptyBucket(new Date(Date.UTC(2026, 0, 1) + i * 3600e3).toISOString().slice(0, 13) + ':00:00Z', 'claude', 'm'));
+  const plan = planPush(rows);
+  assert.equal(PUSH_BATCH, 5000);
+  assert.deepEqual(plan.batches.map((b) => b.length), [5000, 5000, 2001]);
+  assert.equal(planPush(rows, rows[12000].ts).rows.length, 1);
+  assert.match(linkCode(), /^[A-HJ-NP-Z2-9]{8}$/);
+});
+
+test('codex notify insertion is reversible and stays top-level', () => {
+  for (const t of ['', 'model = "x"\n', 'model = "x"\n\n[profiles.a]\nk = 1\n', '# c\n[a]\nb = 2']) {
+    const added = addCodexNotify(t);
+    const firstTable = added.search(/^\s*\[/m);
+    assert.ok(firstTable === -1 || added.indexOf('notify = [') < firstTable);
+    assert.equal(removeCodexNotify(added), t);
+  }
+});
+
+test('claude hook add/remove round-trips', () => {
+  const s = { hooks: { Stop: [{ matcher: '', hooks: [{ type: 'command', command: 'other' }] }] }, x: 1 };
+  assert.deepEqual(removeClaudeHook(addClaudeHook(s)), s);
+  assert.deepEqual(removeClaudeHook(addClaudeHook({})), {});
+});
+
+test('schedule definitions run sync every 30 minutes', () => {
+  const plist = launchdPlist('/opt/node/bin/npx', '/opt/node/bin', '/Users/x/.tokenmaxxing');
+  assert.match(plist, /<integer>1800<\/integer>/);
+  assert.match(plist, /<string>tokenmaxxing-cli<\/string>\n {4}<string>sync<\/string>/);
+  assert.match(cronLine('/usr/bin/npx', '/usr/bin'), /^\*\/30 \* \* \* \* .*tokenmaxxing-cli sync --quiet/);
+});
+
+test('lineDiff marks additions and removals', () => {
+  assert.equal(lineDiff('a\nb\n', 'a\nc\n'), '  a\n- b\n+ c');
+});
