@@ -16,12 +16,29 @@ const cost = (t: Record<keyof Rates, number>, r: Rates) =>
   t.input * r.input + t.cache_read * r.cache_read + t.cache_write_5m * r.cache_write_5m + t.cache_write_1h * r.cache_write_1h + t.output * r.output;
 
 describe("seed-prices", () => {
-  it("prices the CLI's ccusage sanity row at $125.97", () => {
-    const r = table().get("claude-fable-5-1")!;
-    const tokens = { input: 21721, output: 513976, cache_write_5m: 3570946, cache_write_1h: 0, cache_read: 221663704 };
+  // claude-fable-5-1 as LiteLLM priced it on 2026-09-22: a fixed table, so the sanity check tests the
+  // mapping and the math and a legitimate upstream price change never fails it.
+  const FABLE_5_1 = {
+    input_cost_per_token: 1e-5,
+    output_cost_per_token: 5e-5,
+    cache_read_input_token_cost: 2.5e-7,
+    cache_creation_input_token_cost: 1.25e-5,
+    cache_creation_input_token_cost_above_1hr: 2e-5,
+  };
+  const tokens = { input: 21721, output: 513976, cache_write_5m: 3570946, cache_write_1h: 0, cache_read: 221663704 };
+  const oneHour = { ...tokens, cache_write_5m: 0, cache_write_1h: 3570946 };
+
+  it("prices the CLI's ccusage sanity row at $125.97 on the fixed rate table", () => {
+    const r = buildPriceTable({ litellm: { "claude-fable-5-1": FABLE_5_1 } }).get("claude-fable-5-1")!;
     expect(cost(tokens, r)).toBeCloseTo(125.97, 2);
-    const oneHour = { ...tokens, cache_write_5m: 0, cache_write_1h: 3570946 };
-    expect(cost(oneHour, r)).toBeGreaterThan(cost(tokens, r));
+    expect(cost(oneHour, r) - cost(tokens, r)).toBeCloseTo(3570946 * (2e-5 - 1.25e-5), 6);
+  });
+
+  it("prices claude-fable-5-1 from the bundled snapshots, with the 1h cache write above 5m", () => {
+    const r = table().get("claude-fable-5-1");
+    expect(r, "claude-fable-5-1 missing from the bundled snapshots").toBeDefined();
+    for (const v of Object.values(r!)) expect(v).toBeGreaterThan(0);
+    expect(cost(oneHour, r!)).toBeGreaterThan(cost(tokens, r!));
   });
 
   // The same cases are asserted against public.model_key() in supabase/schema.test.sql.
