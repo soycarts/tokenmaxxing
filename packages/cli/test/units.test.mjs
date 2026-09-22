@@ -119,3 +119,46 @@ test('report lists unpriced models with their override note', async () => {
   ]);
   assert.match(renderReport(rep), /Unpriced models \(0 tokens counted toward \$\): codex\/codex-auto-review \(1\.0k tokens — bundled reviewer, no list price\), codex\/mystery-model \(5 tokens\)/);
 });
+
+// --- push granularity ---
+import { periodStart, foldRows } from '../dist/site.js';
+
+test('periodStart aligns to hour, UTC day, and Monday-start week', () => {
+  const ts = '2026-09-23T13:00:00Z'; // a Wednesday
+  assert.equal(periodStart(ts, 'hour'), ts);
+  assert.equal(periodStart(ts, 'day'), '2026-09-23T00:00:00Z');
+  assert.equal(periodStart(ts, 'week'), '2026-09-21T00:00:00Z');
+  assert.equal(periodStart('2026-09-21T00:00:00Z', 'week'), '2026-09-21T00:00:00Z'); // Monday stays
+  assert.equal(periodStart('2026-09-20T23:00:00Z', 'week'), '2026-09-14T00:00:00Z'); // Sunday goes back
+});
+
+test('foldRows sums hourly rows into one row per period, source and model', () => {
+  const mk = (ts, model, input) => ({ ...emptyBucket(ts, 'claude', model), input, output: 1, requests: 1 });
+  const rows = [
+    mk('2026-09-23T01:00:00Z', 'm1', 10),
+    mk('2026-09-23T02:00:00Z', 'm1', 5),
+    mk('2026-09-23T02:00:00Z', 'm2', 7),
+    mk('2026-09-24T09:00:00Z', 'm1', 1),
+  ];
+  assert.equal(foldRows(rows, 'hour'), rows);
+  const day = foldRows(rows, 'day');
+  assert.deepEqual(day.map((r) => [r.ts, r.model, r.input, r.output, r.requests]), [
+    ['2026-09-23T00:00:00Z', 'm1', 15, 2, 2],
+    ['2026-09-23T00:00:00Z', 'm2', 7, 1, 1],
+    ['2026-09-24T00:00:00Z', 'm1', 1, 1, 1],
+  ]);
+  const week = foldRows(rows, 'week');
+  assert.deepEqual(week.map((r) => [r.ts, r.model, r.input]), [
+    ['2026-09-21T00:00:00Z', 'm1', 16],
+    ['2026-09-21T00:00:00Z', 'm2', 7],
+  ]);
+});
+
+test('planPush with day granularity resends the whole current day and reports the hourly mark', () => {
+  const mk = (ts) => ({ ...emptyBucket(ts, 'claude', 'm'), input: 1 });
+  const rows = [mk('2026-09-23T01:00:00Z'), mk('2026-09-23T05:00:00Z'), mk('2026-09-24T02:00:00Z')];
+  const plan = planPush(rows, '2026-09-23T05:00:00Z', 'day');
+  assert.equal(plan.granularity, 'day');
+  assert.deepEqual(plan.rows.map((r) => [r.ts, r.input]), [['2026-09-23T00:00:00Z', 2], ['2026-09-24T00:00:00Z', 1]]);
+  assert.equal(plan.maxHourlyTs, '2026-09-24T02:00:00Z');
+});

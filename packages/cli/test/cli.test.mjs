@@ -282,7 +282,7 @@ test('push: requires link; sends only bucket rows with the bearer token; resumes
     assert.equal(req.url, '/api/v1/push');
     assert.equal(req.headers.authorization, 'Bearer tok_abc');
     const body = JSON.parse(req.body);
-    assert.deepEqual(Object.keys(body), ['v', 'deviceId', 'rows']);
+    assert.deepEqual(Object.keys(body), ['v', 'deviceId', 'granularity', 'rows']);
     assert.equal(body.v, 1);
     assert.equal(body.deviceId, cfg.deviceId);
     assert.equal(body.rows.length, total);

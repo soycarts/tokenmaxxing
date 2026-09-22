@@ -22,7 +22,8 @@ tokenmaxxing plan set <provider> <plan>   # e.g. plan set claude max-20x ; plan 
 tokenmaxxing plan list
 tokenmaxxing verify [--since 30d]         # compare Claude totals with `ccusage` if installed
 tokenmaxxing link                         # prints URL; user opens it and signs in; CLI polls; stores token
-tokenmaxxing push                         # upload bucket rows (opt-in); prints exactly what is sent
+tokenmaxxing push [--all] [--granularity hour|day|week]   # upload bucket rows (opt-in); prints exactly what is sent
+tokenmaxxing granularity set hour|day|week                 # how coarse uploaded rows are (default hour); stored in config
 tokenmaxxing hook install|uninstall|status # OPT-IN Claude Code Stop hook + Codex notify hook that runs `sync`
 tokenmaxxing schedule install|uninstall|status   # launchd (mac) / cron (linux) every 30 min running `sync`
 tokenmaxxing doctor                       # paths found, files scanned, cursor state, pricing snapshot date
@@ -128,6 +129,10 @@ If `ccusage` is on PATH: run `ccusage daily --since YYYYMMDD --json`, then `sync
 - `{site}` = `--site URL` flag > `TOKENMAXXING_SITE` env > `config.site.url` (default `https://tokenmaxxing.fyi`). Connection errors and 404s are reported as one-line errors (exit 1), never stack traces.
 - `link`: generate 8-char code, print `Open {site}/link?code=XXXX and sign in`, then poll `GET {site}/api/v1/link/{code}` every 3s for up to 5 min (202/204 or a body without `token` = keep polling); on `{ token, handle }` store both in config together with the `site.url` used. (Site side is built separately; stub the poll with a clear error if 404.)
 - `push`: send `POST {site}/api/v1/push` with header `Authorization: Bearer <token>` and body `{ v:1, deviceId, rows:[bucket rows since last pushed ts, ≤ 5000 per request] }`. "Since" is `ts >= lastPushedTs`, so the last pushed hour is re-sent (its row may have been replaced since; the site upserts by (deviceId, ts, source, model)). Print the row count, the date range, the envelope, the row fields and the first row before sending; `--dry-run` prints every request body and sends nothing. Store `lastPushedTs` in config at `site.lastPushedTs` after each successful request. Never send paths, project names, prompts, or anything besides bucket rows (rows are rebuilt from a key whitelist).
+
+### Granularity
+
+`config.site.granularity` ∈ `hour` (default) | `day` | `week`. Before sending, `push` folds the local hourly buckets into the chosen period: `day` → ts = 00:00 UTC of that day, `week` → ts = Monday 00:00 UTC; all counts summed per (period, source, model). The envelope carries `granularity`. When the value differs from `config.site.lastPushedGranularity` (or `--all` is given), the first request carries `replaceDevice: true` so the site drops the device's old rows, and every row is resent; afterwards `lastPushedGranularity` is updated. `lastPushedTs` is stored as the local hourly ts, so incremental pushes re-fold from the period containing it (always resend the whole current period). `granularity set` prints the privacy trade-off in one line.
 
 ## hook install (opt-in)
 

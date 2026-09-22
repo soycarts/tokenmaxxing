@@ -58,7 +58,10 @@ tokenmaxxing plan set <provider> <plan>    claude: pro | max-5x | max-20x
 tokenmaxxing plan list
 tokenmaxxing verify [--since 30d]          compare Claude totals with `ccusage` (if installed), 1% tolerance
 tokenmaxxing link [--site URL]             prints a sign-in URL, waits for the site, stores the token
-tokenmaxxing push [--site URL] [--dry-run] upload bucket rows (opt-in); prints what is sent
+tokenmaxxing push [--site URL] [--dry-run] [--all] [--granularity hour|day|week]
+                                           upload bucket rows (opt-in); prints what is sent
+tokenmaxxing granularity [set hour|day|week]  hour (default) uploads hourly rows; day or week uploads
+                                           totals only, so the site never sees which hours you work
 tokenmaxxing hook install|uninstall|status [--yes]      Claude Code Stop hook + Codex notify hook running `sync`
 tokenmaxxing schedule install|uninstall|status [--yes]  launchd (macOS) / cron (Linux), every 30 min
 tokenmaxxing doctor                        paths found, files scanned, cursor state, pricing snapshot date
@@ -76,6 +79,9 @@ Notes:
   by design: ccusage prices every cache write at the 5-minute rate; tokenmaxxing prices 1-hour cache
   writes at the 1-hour rate.
 - `--site` (or `TOKENMAXXING_SITE`) points `link`/`push` at another server, e.g. `http://localhost:3000`.
+- Changing granularity (or `push --all`) tells the site to replace every row it holds for this device, so
+  switching between hourly and daily totals never double counts. The current day or week is resent on each
+  push until it is complete.
 - Custom prices: `src/pricing/overrides.json` in a checkout (`{ "<model>": { "input": 3, "output": 15,
   "cache_read": 0.3, "cache_write_5m": 3.75, "cache_write_1h": 6 } }`, USD per million tokens) wins over
   the snapshots; `{ "<model>": { "unpriced": "<note>" } }` keeps a model unpriced and shows the note (used for

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { configExists, loadConfig, saveConfig, type Config } from './config.js';
+import { isGranularity } from './config.js';
 import { detect, detectionToSources } from './detect.js';
 import { doctor } from './doctor.js';
 import { fmtInt, fmtPrice } from './format.js';
@@ -28,7 +29,9 @@ Usage: tokenmaxxing <command> [options]
   plan list
   verify [--since 30d]               compare Claude totals with ccusage (if installed)
   link [--site URL]                  connect this machine to tokenmaxxing.fyi
-  push [--site URL] [--dry-run] [--all]  upload bucket rows (opt-in); prints what is sent; --all resends everything
+  push [--site URL] [--dry-run] [--all] [--granularity hour|day|week]
+                                     upload bucket rows (opt-in); prints what is sent; --all resends everything
+  granularity [set hour|day|week]    how coarse uploaded rows are (default hour; day/week hide your working hours)
   hook install|uninstall|status [--yes]      opt-in Claude Code Stop / Codex notify hook
   schedule install|uninstall|status [--yes]  run sync every 30 min (launchd / cron)
   doctor                             paths, files scanned, cursor state, pricing snapshot
@@ -128,6 +131,20 @@ async function main(argv: string[]): Promise<number> {
       const cfg = ensureConfig(false);
       return printReport(cfg, a);
     }
+    case 'granularity': {
+      const cfg = loadConfig();
+      const [sub, val] = a.pos;
+      if (sub === 'set') {
+        if (!val || !isGranularity(val)) throw new UsageError('granularity must be hour, day or week');
+        cfg.site.granularity = val;
+        saveConfig(cfg);
+        console.log(`Uploads will be ${val}ly totals${val === 'hour' ? '' : '; the site will not see which hours you work'}. The next push replaces this device's rows on the site.`);
+        return 0;
+      }
+      const cur = cfg.site.granularity ?? 'hour';
+      console.log(`${cur}  (hour = most detail on your profile · day/week = the site never sees your working hours)\nSet with: tokenmaxxing granularity set hour|day|week`);
+      return 0;
+    }
     case 'plan': {
       const cfg = loadConfig();
       const [sub, provider, plan] = a.pos;
@@ -187,7 +204,9 @@ async function main(argv: string[]): Promise<number> {
     }
     case 'push': {
       const cfg = ensureConfig(true);
-      await push(cfg, { site: str(a.flags.site), dryRun: !!a.flags['dry-run'], all: !!a.flags.all });
+      const g = str(a.flags.granularity);
+      if (g !== undefined && !isGranularity(g)) throw new UsageError('--granularity must be hour, day or week');
+      await push(cfg, { site: str(a.flags.site), dryRun: !!a.flags['dry-run'], all: !!a.flags.all, granularity: g });
       return 0;
     }
     case 'hook':

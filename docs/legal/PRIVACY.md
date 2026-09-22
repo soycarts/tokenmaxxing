@@ -12,7 +12,7 @@ tokenmaxxing.fyi receives hourly token counts per AI model from a small tool you
 
 ## What we receive and store
 
-When you push, we receive the hourly rows described above, together with a random device id the CLI generated. When you sign in with GitHub we receive your GitHub id, login, display name, email address and avatar URL from GitHub. We store the handle you choose, whether your profile is public, and any subscription plans you tell us you have, which we use only to compute a value multiple.
+When you push, we receive the rows described above at the granularity you chose in the CLI (hourly by default, or daily or weekly totals if you prefer not to reveal when you work), together with a random device id the CLI generated. When you sign in with GitHub we receive your GitHub id, login, display name, email address and avatar URL from GitHub. We store the handle you choose, whether your profile is public, and any subscription plans you tell us you have, which we use only to compute a value multiple.
 
 We do not receive: prompts, responses, code, file paths, project or repository names, git branches, IP-derived location beyond what our hosting provider logs for security, or anything typed into your tools.
 

@@ -55,6 +55,19 @@ Everything is server-rendered SVG or a static HTML page; no client JS required i
    - iframe: `<iframe src="https://tokenmaxxing.fyi/embed/{handle}" width="480" height="160" style="border:0" loading="lazy" title="tokenmaxxing"></iframe>`
 5. Tests: snapshot-free assertions that `card` returns valid SVG with the handle and multiple present, correct dimensions per size, `private` variant when not public, and the cache header.
 
+## E. Push granularity (hour / day / week)
+
+Users choose how coarse the rows they upload are. Coarser rows reveal less (no working-hours pattern) at the cost of hourly detail on their own profile.
+
+- Envelope gains `granularity: "hour" | "day" | "week"` (default `"hour"` when absent) and optional `replaceDevice: true`.
+- Row `ts` must be the period start: any whole hour for `hour`, 00:00 UTC for `day`, Monday 00:00 UTC for `week`. Validate accordingly (extend `validatePush`; reject rows whose ts is not aligned to the declared granularity).
+- `buckets` gains `granularity text not null default 'hour'` (idempotent `alter table … add column if not exists`), and the PK stays `(device_id, ts, source, model)`.
+- `replaceDevice: true` on a request deletes every existing row for that device before upserting the batch (single transaction via an RPC `replace_device_buckets(p_device uuid, p_rows jsonb)`), so switching granularity never double counts. Only the first batch of a push carries it.
+- Per-row token cap scales: cap × 24 for `day`, cap × 168 for `week`.
+- All aggregates already sum over `ts` ranges, so day/week rows fall into the right week/month as long as the period start is inside the range. The 30-day sparkline buckets by day; a `week` row is drawn on its start day. Nothing else on the site keys off hours.
+- Profile page shows a small note under the sparkline when the user's latest push was coarser than hourly ("Uploads are daily totals").
+- Privacy policy already mentions the choice (docs/legal/PRIVACY.md).
+
 ## Done means
 
-`npm run build`, `npm test`, `npm run lint` green; screenshots of `/card/carter.svg` (both sizes, both themes), `/embed/carter`, `/sponsors`, `/privacy`, `/terms`; `curl -H 'Accept: text/markdown' https://localhost/leaderboard` returns a markdown table; `/skill.md` validates as SKILL.md frontmatter. Schema change applied with the same idempotent style as the rest of `schema.sql` (do not apply to the live DB; Carter's session does that).
+`npm run build`, `npm test`, `npm run lint` green; push validation tests for day/week alignment and `replaceDevice`; screenshots of `/card/carter.svg` (both sizes, both themes), `/embed/carter`, `/sponsors`, `/privacy`, `/terms`; `curl -H 'Accept: text/markdown' https://localhost/leaderboard` returns a markdown table; `/skill.md` validates as SKILL.md frontmatter. Schema change applied with the same idempotent style as the rest of `schema.sql` (do not apply to the live DB; Carter's session does that).

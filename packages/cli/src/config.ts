@@ -5,6 +5,12 @@ import type { Provider, SourceName } from './types.js';
 
 export const DEFAULT_SITE = 'https://tokenmaxxing.fyi';
 
+export const GRANULARITIES = ['hour', 'day', 'week'] as const;
+export type Granularity = (typeof GRANULARITIES)[number];
+export function isGranularity(s: string): s is Granularity {
+  return (GRANULARITIES as readonly string[]).includes(s);
+}
+
 export interface SourceConfig {
   enabled: boolean;
   paths: string[];
@@ -15,7 +21,16 @@ export interface Config {
   deviceId: string;
   sources: Record<SourceName, SourceConfig>;
   plans: Partial<Record<Provider, string>>;
-  site: { url: string; token?: string; handle?: string; lastPushedTs?: string };
+  site: {
+    url: string;
+    token?: string;
+    handle?: string;
+    lastPushedTs?: string;
+    /** How coarse uploaded rows are. Coarser hides working hours. Default hour. */
+    granularity?: Granularity;
+    /** Granularity of the rows currently on the site for this device. */
+    lastPushedGranularity?: Granularity;
+  };
 }
 
 export function defaultConfig(): Config {
