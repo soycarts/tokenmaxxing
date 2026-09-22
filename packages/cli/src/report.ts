@@ -1,7 +1,7 @@
 import type { Config } from './config.js';
 import { fmtPrice, fmtTokens, fmtUsd, localDate, table } from './format.js';
 import { inPeriod, type Period } from './period.js';
-import { planPrice, PROVIDERS, roi, sourceFor } from './plans.js';
+import { CUSTOM, describeLines, providerMonthly, PROVIDERS, roi, sourceFor, unitPrice } from './plans.js';
 import { cost, resolve, SNAPSHOT_DATE, unpricedNote } from './pricing/index.js';
 import { COUNT_FIELDS, type Bucket, type Provider, type SourceName } from './types.js';
 
@@ -25,12 +25,15 @@ export interface ReportRow {
   unpriced_tokens: number;
 }
 
-export interface PlanLine {
+export interface PlanRoi {
   provider: Provider;
-  plan: string;
-  price: number | null;
   source: SourceName;
-  cost: number;
+  /** `monthly` is the price of one seat; custom lines carry their label. */
+  lines: { plan: string; qty: number; monthly: number; label?: string }[];
+  /** Σ monthly × qty. */
+  monthly: number;
+  /** API-equivalent cost of the provider's source over the period. */
+  api_equiv: number;
   roi: number | null;
 }
 
@@ -40,7 +43,7 @@ export interface Report {
   by: GroupBy;
   rows: ReportRow[];
   totals: Omit<ReportRow, 'source' | 'model' | 'day'> & { cost: number };
-  plans: PlanLine[];
+  plans: PlanRoi[];
   unpriced: { source: SourceName; model: string; tokens: number; note?: string }[];
   excluded: { source: SourceName; reason: string }[];
 }
@@ -109,14 +112,26 @@ export function buildReport(buckets: Iterable<Bucket>, period: Period, cfg: Conf
     return (b.cost ?? -1) - (a.cost ?? -1) || tokensOf(b) - tokensOf(a);
   });
 
-  const plans: PlanLine[] = [];
+  const plans: PlanRoi[] = [];
   for (const provider of PROVIDERS) {
-    const plan = cfg.plans[provider];
-    if (!plan) continue;
+    const lines = cfg.plans[provider];
+    if (!lines?.length) continue;
     const source = sourceFor(provider);
-    const price = planPrice(provider, plan) ?? null;
+    const monthly = providerMonthly(provider, lines);
     const c = costBySource.get(source) ?? 0;
-    plans.push({ provider, plan, price, source, cost: c, roi: price ? roi(c, price, period.days) : null });
+    plans.push({
+      provider,
+      source,
+      lines: lines.map((l) => ({
+        plan: l.plan,
+        qty: l.qty,
+        monthly: unitPrice(provider, l),
+        ...(l.plan === CUSTOM ? { label: l.label } : {}),
+      })),
+      monthly,
+      api_equiv: c,
+      roi: monthly > 0 ? roi(c, monthly, period.days) : null,
+    });
   }
 
   const excluded: Report['excluded'] = [];
@@ -192,18 +207,18 @@ export function renderReport(rep: Report): string {
     out.push('Plans:  none set (tokenmaxxing plan set <provider> <plan> to see ROI)');
   } else {
     const planRows = rep.plans.map((p) => [
-      `${p.provider} ${p.plan}`,
-      p.price === null ? '(unknown plan)' : `${fmtPrice(p.price)}/mo`,
-      `→ API-equivalent ${fmtUsd(p.cost)}`,
+      p.provider,
+      describeLines(p.lines),
+      `= ${fmtPrice(p.monthly)}/mo`,
+      `→ API-equivalent ${fmtUsd(p.api_equiv)}`,
       p.roi === null ? '' : `→ ROI ${p.roi.toFixed(1)}×`,
     ]);
-    const priced = rep.plans.filter((p) => p.price !== null);
-    if (priced.length > 1) {
-      const price = priced.reduce((s, p) => s + p.price!, 0);
-      const c = priced.reduce((s, p) => s + p.cost, 0);
-      planRows.push(['total', `${fmtPrice(Math.round(price * 100) / 100)}/mo`, `→ API-equivalent ${fmtUsd(c)}`, `→ ROI ${roi(c, price, rep.period.days).toFixed(1)}×`]);
+    if (rep.plans.length > 1) {
+      const monthly = Math.round(rep.plans.reduce((s, p) => s + p.monthly, 0) * 100) / 100;
+      const c = rep.plans.reduce((s, p) => s + p.api_equiv, 0);
+      planRows.push(['total', '', `= ${fmtPrice(monthly)}/mo`, `→ API-equivalent ${fmtUsd(c)}`, `→ ROI ${roi(c, monthly, rep.period.days).toFixed(1)}×`]);
     }
-    table(['', '', '', ''], planRows, ['l', 'l', 'l', 'l'], 1)
+    table(['', '', '', '', ''], planRows, ['l', 'l', 'l', 'l', 'l'], 2)
       .slice(1)
       .forEach((l, i) => out.push((i === 0 ? 'Plans:  ' : '        ') + l));
   }

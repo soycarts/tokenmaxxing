@@ -4,10 +4,13 @@ import { configExists, loadConfig, saveConfig, type Config } from './config.js';
 import { isGranularity } from './config.js';
 import { detect, detectionToSources } from './detect.js';
 import { doctor } from './doctor.js';
-import { fmtInt, fmtPrice } from './format.js';
+import { fmtInt, fmtPrice, table } from './format.js';
 import { hookCommand } from './hook.js';
 import { parsePeriod } from './period.js';
-import { isProvider, planTable, PROVIDERS } from './plans.js';
+import {
+  addLine, CUSTOM, describeLines, isProvider, lineName, parsePlanSpec, planTable, plansMonthly, PROVIDERS, providerMonthly, unitPrice,
+  type PlanLine,
+} from './plans.js';
 import { buildReport, renderReport, reportJson, type GroupBy } from './report.js';
 import { scheduleCommand } from './schedule.js';
 import { link, push, SiteError } from './site.js';
@@ -25,7 +28,9 @@ Usage: tokenmaxxing <command> [options]
   init                               detect tools, write config, first sync, print report
   sync [--quiet]                     incremental parse of all detected sources
   report [--since 7d|30d|YYYY-MM-DD] [--json] [--by model|source|day]
-  plan set <provider> <plan>         e.g. plan set claude max-20x · plan set openai pro
+  plan set <provider> <plan> [xN]    replace a provider's plans, e.g. plan set claude max-20x x5 · plan set openai pro
+  plan add <provider> <plan> [xN]    add a line, e.g. plan add claude pro · plan add openai custom 100 "Codex $100"
+  plan remove <provider> [<plan>]    remove one line, or all of a provider's plans (plan set <provider> none also clears)
   plan list
   verify [--since 30d]               compare Claude totals with ccusage (if installed)
   link [--site URL]                  connect this machine to tokenmaxxing.fyi
@@ -45,7 +50,7 @@ interface Args {
   flags: Record<string, string | boolean>;
 }
 
-const VALUE_FLAGS = new Set(['since', 'by', 'site']);
+const VALUE_FLAGS = new Set(['since', 'by', 'site', 'qty']);
 
 export function parseArgs(argv: string[]): Args {
   const out: Args = { pos: [], flags: {} };
@@ -145,36 +150,8 @@ async function main(argv: string[]): Promise<number> {
       console.log(`${cur}  (hour = most detail on your profile · day/week = the site never sees your working hours)\nSet with: tokenmaxxing granularity set hour|day|week`);
       return 0;
     }
-    case 'plan': {
-      const cfg = loadConfig();
-      const [sub, provider, plan] = a.pos;
-      if (sub === 'list' || sub === undefined) {
-        const t = planTable();
-        for (const p of PROVIDERS) {
-          const cur = cfg.plans[p];
-          const opts = Object.entries(t[p]).map(([k, v]) => `${k === cur ? '*' : ''}${k} ${fmtPrice(v)}`);
-          console.log(`${p.padEnd(7)} ${opts.join(' · ')}`);
-        }
-        console.log('\nSet with: tokenmaxxing plan set <provider> <plan>   (* = current)');
-        return 0;
-      }
-      if (sub === 'set') {
-        if (!provider || !isProvider(provider)) throw new UsageError(`provider must be one of: ${PROVIDERS.join(', ')}`);
-        if (plan === 'none' || plan === 'off') {
-          delete cfg.plans[provider];
-          saveConfig(cfg);
-          console.log(`Cleared ${provider} plan.`);
-          return 0;
-        }
-        const t = planTable()[provider];
-        if (!plan || !(plan in t)) throw new UsageError(`plan for ${provider} must be one of: ${Object.keys(t).join(', ')}`);
-        cfg.plans[provider] = plan;
-        saveConfig(cfg);
-        console.log(`Set ${provider} plan to ${plan} (${fmtPrice(t[plan])}/mo).`);
-        return 0;
-      }
-      throw new UsageError('usage: tokenmaxxing plan set <provider> <plan> | plan list');
-    }
+    case 'plan':
+      return planCommand(a);
     case 'verify': {
       const cfg = ensureConfig(true);
       const period = parsePeriod(str(a.flags.since) ?? '30d');
@@ -220,6 +197,66 @@ async function main(argv: string[]): Promise<number> {
       console.error(HELP);
       return 1;
   }
+}
+
+const PLAN_USAGE =
+  'usage: tokenmaxxing plan list | plan set <provider> <plan> [xN] | plan add <provider> <plan> [xN] | plan remove <provider> [<plan>]';
+
+function planSummary(provider: (typeof PROVIDERS)[number], lines: PlanLine[]): string {
+  return lines.length ? `${provider}: ${describeLines(lines)} = ${fmtPrice(providerMonthly(provider, lines))}/mo` : `${provider}: no plan`;
+}
+
+function planCommand(a: Args): number {
+  const cfg = loadConfig();
+  const [sub, provider, ...rest] = a.pos;
+  if (sub === 'list' || sub === undefined) {
+    const rows: string[][] = [];
+    for (const p of PROVIDERS) {
+      const lines = cfg.plans[p] ?? [];
+      if (!lines.length) rows.push([`  ${p}`, 'none', '', '']);
+      lines.forEach((l, i) =>
+        rows.push([i === 0 ? `* ${p}` : '', `${l.qty}× ${lineName(l)}`, `${fmtPrice(unitPrice(p, l))} each`, `${fmtPrice(unitPrice(p, l) * l.qty)}/mo`]),
+      );
+      if (lines.length > 1) rows.push(['', `${p} total`, '', `${fmtPrice(providerMonthly(p, lines))}/mo`]);
+    }
+    console.log(table(['', '', '', ''], rows, ['l', 'l', 'r', 'r'], 3).slice(1).join('\n'));
+    if (Object.keys(cfg.plans).length) console.log(`\nAll plans: ${fmtPrice(plansMonthly(cfg.plans))}/mo`);
+    const t = planTable();
+    console.log('\nAvailable (USD per month per seat):');
+    for (const p of PROVIDERS) console.log(`  ${p.padEnd(7)} ${Object.entries(t[p]).map(([k, v]) => `${k} ${fmtPrice(v)}`).join(' · ')}`);
+    console.log(`  any     ${CUSTOM} <monthly> [label]   e.g. plan add openai custom 100 "Codex $100 promo"`);
+    console.log('\nChange with: tokenmaxxing plan add <provider> <plan> [xN] · plan set <provider> <plan> [xN] · plan remove <provider> [<plan>]   (* = has a plan)');
+    return 0;
+  }
+  if (sub !== 'set' && sub !== 'add' && sub !== 'remove') throw new UsageError(PLAN_USAGE);
+  if (!provider || !isProvider(provider)) throw new UsageError(`provider must be one of: ${PROVIDERS.join(', ')}`);
+  const cur = cfg.plans[provider] ?? [];
+  let next: PlanLine[];
+  if (sub === 'remove' || (sub === 'set' && (rest[0] === 'none' || rest[0] === 'off'))) {
+    const [plan, ...label] = rest;
+    if (sub === 'set' || plan === undefined) next = [];
+    else {
+      const text = label.join(' ').trim();
+      const hits = cur.filter((l) => l.plan === plan && (plan !== CUSTOM || !text || l.label === text));
+      if (!hits.length) throw new UsageError(`${provider} has no ${plan}${text ? ` "${text}"` : ''} line (${planSummary(provider, cur)})`);
+      if (hits.length > 1) throw new UsageError(`${provider} has ${hits.length} custom lines; name one: ${hits.map((l) => `"${l.label}"`).join(', ')}`);
+      next = cur.filter((l) => l !== hits[0]);
+    }
+  } else {
+    const line = parsePlanSpec(provider, rest, typeof a.flags.qty === 'string' ? a.flags.qty : a.flags.qty ? '' : undefined);
+    if (typeof line === 'string') throw new UsageError(line);
+    if (sub === 'set') next = [line];
+    else {
+      const merged = addLine(cur, line);
+      if (typeof merged === 'string') throw new UsageError(merged);
+      next = merged;
+    }
+  }
+  if (next.length) cfg.plans[provider] = next;
+  else delete cfg.plans[provider];
+  saveConfig(cfg);
+  console.log(next.length ? planSummary(provider, next) : `Cleared ${provider} plan.`);
+  return 0;
 }
 
 /** Commands other than init work without a config by detecting sources on the fly (nothing is written). */

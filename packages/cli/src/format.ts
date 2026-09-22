@@ -19,8 +19,9 @@ export function fmtInt(n: number): string {
   return Math.round(n).toLocaleString('en-US');
 }
 
+/** 20 → "$20", 1020 → "$1,020", 19.99 → "$19.99" */
 export function fmtPrice(n: number): string {
-  return Number.isInteger(n) ? `$${n}` : fmtUsd(n);
+  return fmtUsd(n, Number.isInteger(n) ? 0 : 2);
 }
 
 export function padEnd(s: string, w: number): string {

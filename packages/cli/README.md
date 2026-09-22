@@ -20,7 +20,7 @@ codex    gpt-6-astra        24.4M      1.1B         0     2.5M   $1,500.63
 ──────────────────────────────────────────────────────────────────────────
 TOTAL                       24.4M      1.4B      8.9M     2.7M   $1,613.01
 
-Plans:  claude max-20x $200/mo → API-equivalent $112.38   → ROI 0.6×
+Plans:  claude  1× max-20x  = $200/mo  → API-equivalent $112.38  → ROI 0.6×
 Unpriced models (0 tokens counted toward $): none
 ```
 
@@ -51,11 +51,15 @@ offsets so each `sync` only reads what's new).
 tokenmaxxing init                          detect tools, write config, first sync, print report
 tokenmaxxing sync [--quiet]                incremental parse of all detected sources
 tokenmaxxing report [--since 7d|30d|YYYY-MM-DD] [--json] [--by model|source|day]
-tokenmaxxing plan set <provider> <plan>    claude: pro | max-5x | max-20x
-                                           openai: plus | pro          (ChatGPT plans that include Codex)
-                                           cursor: pro | pro-plus | ultra
-                                           google: ai-pro | ai-ultra-100 | ai-ultra
-tokenmaxxing plan list
+tokenmaxxing plan set <provider> <plan> [xN]   replace a provider's plans (qty N, default 1)
+tokenmaxxing plan add <provider> <plan> [xN]   add a line; several plans per provider add up
+                                           claude: pro | max-5x | max-20x | team-standard | team-premium
+                                           openai: go | plus | pro-100 | pro | business   (ChatGPT; Codex is in Plus/Pro/Business)
+                                           cursor: pro | pro-plus | ultra | teams
+                                           google: ai-plus | ai-pro | ai-ultra-100 | ai-ultra
+                                           any:    custom <monthly> "<label>", e.g. plan add openai custom 100 "Codex $100 promo"
+tokenmaxxing plan remove <provider> [<plan>]   remove one line, or all of a provider's plans
+tokenmaxxing plan list                     your lines, monthly totals and every plan id with its price
 tokenmaxxing verify [--since 30d]          compare Claude totals with `ccusage` (if installed), 1% tolerance
 tokenmaxxing link [--site URL]             prints a sign-in URL, waits for the site, stores the token
 tokenmaxxing push [--site URL] [--dry-run] [--all] [--granularity hour|day|week]

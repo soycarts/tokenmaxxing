@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { files } from './paths.js';
 import { readJson, writeJsonAtomic, isFile } from './fsutil.js';
-import type { Provider, SourceName } from './types.js';
+import { normalizePlans, type Plans } from './plans.js';
+import type { SourceName } from './types.js';
 
 export const DEFAULT_SITE = 'https://tokenmaxxing.fyi';
 
@@ -20,7 +21,8 @@ export interface Config {
   version: 1;
   deviceId: string;
   sources: Record<SourceName, SourceConfig>;
-  plans: Partial<Record<Provider, string>>;
+  /** Per provider a list of plan lines. The legacy `{claude:"max-20x"}` form is normalised on load. */
+  plans: Plans;
   site: {
     url: string;
     token?: string;
@@ -62,7 +64,7 @@ export function loadConfig(): Config {
     version: 1,
     deviceId: typeof raw.deviceId === 'string' && raw.deviceId ? raw.deviceId : base.deviceId,
     sources: { ...base.sources, ...(raw.sources ?? {}) },
-    plans: { ...(raw.plans ?? {}) },
+    plans: normalizePlans(raw.plans),
     site: { ...base.site, ...(raw.site ?? {}) },
   };
 }
