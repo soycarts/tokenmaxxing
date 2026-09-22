@@ -36,6 +36,8 @@ export type SiteStats = {
   public_users: number;
   top_model: string | null;
   top_model_usd: number | null;
+  /** 30-day API-equivalent total over public profiles. Absent before the v0.2 schema. */
+  month_usd?: number | null;
 };
 
 export type ProfileModel = {

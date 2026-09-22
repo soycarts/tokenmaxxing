@@ -40,17 +40,22 @@ function secondary(metric: Metric, r: LeaderboardRow): string {
   }
 }
 
-export function Board({ rows, metric }: { rows: LeaderboardRow[]; metric: Metric }) {
+/**
+ * A ranked board. `sponsor` (a SponsorRow) sits between the header band and rank 1, outside the
+ * ordered list, so it is never numbered or counted as an entry.
+ */
+export function Board({ rows, metric, sponsor }: { rows: LeaderboardRow[]; metric: Metric; sponsor?: React.ReactNode }) {
   return (
     <div className="sticker overflow-hidden">
+      <div aria-hidden="true" className="hidden grid-cols-[4rem_1fr_10rem_11rem_5rem] gap-4 bg-band px-5 py-3 text-on-band sm:grid">
+        <span className="display text-sm tracking-[0.05em]">Rank</span>
+        <span className="display text-sm tracking-[0.05em]">Who</span>
+        <span className="display text-right text-sm tracking-[0.05em]">{TABS.find((t) => t.value === metric)!.label.split(" ")[0]}</span>
+        <span className="display text-right text-sm tracking-[0.05em]">{metric === "volume" ? "Value" : metric === "roi" ? "Value on plan" : "Tokens"}</span>
+        <span className="display text-right text-sm tracking-[0.05em]">Tools</span>
+      </div>
+      {sponsor}
       <ol className="divide-y-2 divide-line">
-        <li aria-hidden="true" className="hidden grid-cols-[4rem_1fr_10rem_11rem_5rem] gap-4 bg-band px-5 py-3 text-on-band sm:grid">
-          <span className="display text-sm tracking-[0.05em]">Rank</span>
-          <span className="display text-sm tracking-[0.05em]">Who</span>
-          <span className="display text-right text-sm tracking-[0.05em]">{TABS.find((t) => t.value === metric)!.label.split(" ")[0]}</span>
-          <span className="display text-right text-sm tracking-[0.05em]">{metric === "volume" ? "Value" : metric === "roi" ? "Value on plan" : "Tokens"}</span>
-          <span className="display text-right text-sm tracking-[0.05em]">Tools</span>
-        </li>
         {rows.map((r) => (
           <li
             key={r.handle}

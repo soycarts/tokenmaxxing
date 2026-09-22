@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { after } from "next/server";
 import { Chips } from "@/components/chips";
 import { NotConfigured } from "@/components/not-configured";
 import { Board, TABS } from "@/components/leaderboard-board";
+import { SponsorRow, SponsorThisSpot } from "@/components/sponsor";
 import { getLeaderboard } from "@/lib/data";
+import { boardPlacement } from "@/lib/sponsors";
+import { getSponsor, recordImpression } from "@/lib/sponsors-data";
 import { PERIOD_LABEL, PERIODS, parseMetric, parsePeriod, type Metric, type Period } from "@/lib/periods";
 
 export const metadata: Metadata = { title: "Leaderboard" };
@@ -12,7 +16,9 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const metric = parseMetric(sp.metric);
   const period = parsePeriod(sp.period);
-  const res = await getLeaderboard(period, metric);
+  const placement = boardPlacement(metric);
+  const [res, sponsor] = await Promise.all([getLeaderboard(period, metric), getSponsor(placement)]);
+  if (sponsor) after(() => recordImpression(sponsor, placement));
   const tab = TABS.find((t) => t.value === metric)!;
   const href = (m: Metric, p: Period) => `/leaderboard?metric=${m}&period=${p}`;
 
@@ -65,10 +71,18 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
         ) : res.error ? (
           <p role="alert" className="font-semibold text-danger">The leaderboard could not be loaded. Try again in a minute.</p>
         ) : res.data.length === 0 ? (
-          <Empty />
+          <>
+            {sponsor && (
+              <div className="sticker mb-6 overflow-hidden">
+                <SponsorRow s={sponsor} />
+              </div>
+            )}
+            <Empty />
+          </>
         ) : (
-          <Board rows={res.data} metric={metric} />
+          <Board rows={res.data} metric={metric} sponsor={sponsor ? <SponsorRow s={sponsor} /> : undefined} />
         )}
+        {res.configured && !sponsor && <SponsorThisSpot className="mt-3" />}
       </div>
     </div>
   );
