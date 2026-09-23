@@ -58,9 +58,13 @@ export type ProfilePage = {
   avatar_url: string | null;
   public: boolean;
   is_you: boolean;
-  plans: Record<string, string>;
+  /** As stored: the legacy `{claude:"max-20x"}` or the list shape. Read it through sanitizePlans. */
+  plans: Record<string, unknown>;
   period: Period;
   period_days: number;
+  /** Σ price × qty over every plan line. Absent before the multi-plan schema is applied. */
+  plans_monthly_usd?: number;
+  /** Older name for plans_monthly_usd. */
   plan_monthly_usd: number;
   plan_period_usd: number;
   api_equiv_usd: number;

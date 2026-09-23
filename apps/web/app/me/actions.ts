@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { suggestSlug } from "@/lib/handles";
 import { HANDLE_RE, SLUG_RE } from "@/lib/periods";
-import { PROVIDERS, sanitizePlans } from "@/lib/plans";
+import { applyPlanOp, invalidRows, rowsFromForm, sanitizePlans, type PlansFormState } from "@/lib/plans";
 import { safeNext } from "@/lib/redirect";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
@@ -54,16 +54,28 @@ export async function setPublic(form: FormData) {
   back("/me", "ok", makePublic ? "Your profile is public." : "Your profile is private.");
 }
 
-export async function savePlans(form: FormData) {
-  const { supabase, user } = await requireUser();
-  const raw: Record<string, string> = {};
-  for (const provider of PROVIDERS) {
-    const v = form.get(`plan_${provider}`);
-    if (typeof v === "string" && v) raw[provider] = v;
+/**
+ * The /me plans form (used with useActionState, so it also works without JavaScript). The
+ * add/remove buttons post `op=add:<provider>` / `op=remove:<provider>:<i>` and get the edited
+ * rows back unsaved; anything else (the Save button, or Enter) saves.
+ */
+export async function savePlans(prev: PlansFormState, form: FormData): Promise<PlansFormState> {
+  const op = String(form.get("op") ?? "save");
+  if (op.startsWith("add:") || op.startsWith("remove:")) {
+    return { rows: applyPlanOp(rowsFromForm(form), op), v: (prev?.v ?? 0) + 1 };
   }
-  const { error } = await supabase.from("profiles").update({ plans: sanitizePlans(raw) }).eq("id", user.id);
+  const { supabase, user } = await requireUser();
+  const plans = sanitizePlans(form);
+  const { error } = await supabase.from("profiles").update({ plans }).eq("id", user.id);
   if (error) back("/me", "error", "Could not save plans.");
-  back("/me", "ok", "Plans saved.");
+  const bad = invalidRows(rowsFromForm(form));
+  back(
+    "/me",
+    "ok",
+    bad
+      ? `Plans saved. ${bad === 1 ? "One row was" : `${bad} rows were`} left out: seats must be 1 to 99 and a custom amount $0.01 to $10,000 a month.`
+      : "Plans saved.",
+  );
 }
 
 export async function renameDevice(form: FormData) {

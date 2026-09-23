@@ -40,7 +40,7 @@ ${fence(ONBOARDING_PROMPT)}
 
 ## Install commands
 
-${fence([INSTALL_COMMAND, "npx tokenmaxxing-cli plan set <provider> <plan>   # optional; ask which plans the user has", LINK_COMMAND, GRANULARITY_COMMAND, PUSH_COMMAND].join("\n"), "bash")}
+${fence([INSTALL_COMMAND, "npx tokenmaxxing-cli plan add <provider> <plan> [xN]   # optional; ask which plans (and how many) the user has", LINK_COMMAND, GRANULARITY_COMMAND, PUSH_COMMAND].join("\n"), "bash")}
 
 Show the user the report \`init\` prints. Ask before setting plans (never guess), before linking, before choosing a granularity, and before pushing. Do not open the link URL yourself unless asked.
 
@@ -171,11 +171,12 @@ export function apiMarkdown(base: string): string {
     display_name: "Carter",
     avatar_url: "https://avatars.githubusercontent.com/u/1",
     public: true,
-    plans: { claude: "max-20x" },
+    plans: { claude: [{ plan: "max-20x", qty: 1 }], openai: [{ plan: "custom", label: "Codex $100 promo", monthly: 100, qty: 1 }] },
     period: "month",
-    plan_monthly_usd: 200,
+    plans_monthly_usd: 300,
+    plan_monthly_usd: 300,
     period_days: 30,
-    plan_period_usd: 197.13,
+    plan_period_usd: 295.69,
     api_equiv_usd: 4476.25,
     tokens_total: 380000000,
     output_tokens: 4200000,
@@ -231,7 +232,7 @@ Aggregates for one public profile. \`period\` defaults to \`month\`. 404 \`{ "er
 
 ${j(profile)}
 
-\`daily\` always covers the last 30 days (UTC). \`granularity\` is how coarse the owner's latest upload was (\`hour\`, \`day\` or \`week\`); coarse rows are drawn on the day their period starts.
+\`plans\` lists, per provider, lines of \`{ plan, qty }\` (plan ids as in \`npx tokenmaxxing-cli plan list\`) or custom lines \`{ plan: "custom", label, monthly, qty }\`. \`plans_monthly_usd\` is Σ price × qty (\`plan_monthly_usd\` is the older name for it); \`plan_period_usd\` prorates it to the period. \`daily\` always covers the last 30 days (UTC). \`granularity\` is how coarse the owner's latest upload was (\`hour\`, \`day\` or \`week\`); coarse rows are drawn on the day their period starts.
 
 ## GET /api/v1/orgs/{slug}
 

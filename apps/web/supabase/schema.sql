@@ -52,29 +52,81 @@ returns text language sql immutable parallel safe set search_path = '' as $$
     '([0-9])\.([0-9])', '\1-\2', 'g')
 $$;
 
--- Plan prices, USD per month. Mirrors lib/plans.ts (a unit test keeps them in step).
+-- Plan prices, USD per month per seat. Mirrors lib/plans.ts and packages/cli/src/plans.json
+-- (a unit test keeps them in step; sources and date in packages/cli/src/plans.md).
 create or replace function public.plan_price_usd(p_provider text, p_plan text)
 returns numeric language sql immutable parallel safe set search_path = '' as $$
   select p.usd from (values
     ('claude', 'pro', 20::numeric),
     ('claude', 'max-5x', 100::numeric),
     ('claude', 'max-20x', 200::numeric),
+    ('claude', 'team-standard', 25::numeric),
+    ('claude', 'team-premium', 125::numeric),
+    ('openai', 'go', 8::numeric),
     ('openai', 'plus', 20::numeric),
+    ('openai', 'pro-100', 100::numeric),
     ('openai', 'pro', 200::numeric),
+    ('openai', 'business', 25::numeric),
     ('cursor', 'pro', 20::numeric),
     ('cursor', 'pro-plus', 60::numeric),
     ('cursor', 'ultra', 200::numeric),
+    ('cursor', 'teams', 40::numeric),
+    ('google', 'ai-plus', 4.99::numeric),
     ('google', 'ai-pro', 19.99::numeric),
-    ('google', 'ai-ultra-100', 100::numeric),
-    ('google', 'ai-ultra', 200::numeric)
+    ('google', 'ai-ultra-100', 99.99::numeric),
+    ('google', 'ai-ultra', 199.99::numeric)
   ) as p(provider, plan, usd)
   where p.provider = p_provider and p.plan = p_plan
 $$;
 
+-- Σ monthly cost of a profiles.plans document. Reads both shapes, per provider:
+--   legacy  "max-20x"                                  = one seat
+--   lines   [{"plan":"max-20x","qty":5}, {"plan":"pro"}, {"plan":"custom","label":"…","monthly":100,"qty":1}]
+-- qty is an integer 1–99 (absent = 1); a custom line costs monthly (0.01–10000) × qty. Lines
+-- that cannot be priced (unknown provider or plan, bad qty or amount) count as nothing.
+-- Nested CASEs, not AND, so no cast runs on a value whose type was not checked first.
 create or replace function public.plans_monthly_usd(p_plans jsonb)
 returns numeric language sql immutable parallel safe set search_path = '' as $$
-  select coalesce(sum(public.plan_price_usd(e.key, e.value)), 0)
-  from jsonb_each_text(case when jsonb_typeof(p_plans) = 'object' then p_plans else '{}'::jsonb end) as e
+  select coalesce(round(sum(x.usd), 2), 0)
+  from (
+    select
+      case jsonb_typeof(l.line)
+        when 'string' then public.plan_price_usd(e.key, l.line #>> '{}')
+        when 'object' then
+          case
+            when jsonb_typeof(l.line -> 'qty') is not null and jsonb_typeof(l.line -> 'qty') <> 'number' then null
+            else
+              case
+                when not (l.line ? 'qty') then 1
+                when (l.line ->> 'qty')::numeric between 1 and 99
+                     and (l.line ->> 'qty')::numeric = trunc((l.line ->> 'qty')::numeric)
+                  then (l.line ->> 'qty')::numeric
+              end
+              * case
+                  when jsonb_typeof(l.line -> 'plan') <> 'string' then null
+                  when l.line ->> 'plan' = 'custom' then
+                    case
+                      when e.key not in ('claude', 'openai', 'cursor', 'google') then null
+                      when jsonb_typeof(l.line -> 'monthly') <> 'number' then null
+                      else
+                        case
+                          when round((l.line ->> 'monthly')::numeric, 2) between 0.01 and 10000
+                            then round((l.line ->> 'monthly')::numeric, 2)
+                        end
+                    end
+                  else public.plan_price_usd(e.key, l.line ->> 'plan')
+                end
+          end
+      end as usd
+    from jsonb_each(case when jsonb_typeof(p_plans) = 'object' then p_plans else '{}'::jsonb end) as e
+    cross join lateral jsonb_array_elements(
+      case jsonb_typeof(e.value)
+        when 'array' then e.value
+        when 'string' then jsonb_build_array(e.value)
+        else '[]'::jsonb
+      end
+    ) as l(line)
+  ) x
 $$;
 
 -- Rolling windows: week = last 7 days, month = last 30 days, all = everything.
@@ -122,6 +174,11 @@ create policy "profiles update own" on public.profiles
 revoke insert, update, delete on public.profiles from anon;
 revoke update, delete on public.profiles from authenticated;
 grant update (display_name, avatar_url, public, plans) on public.profiles to authenticated;
+
+-- Plans are a few lines per provider; this only stops someone storing a huge document through
+-- the column grant above.
+alter table public.profiles drop constraint if exists profiles_plans_size;
+alter table public.profiles add constraint profiles_plans_size check (octet_length(plans::text) <= 16384);
 
 -- ------------------------------------------------------------------------------- devices
 create table if not exists public.devices (
@@ -586,6 +643,9 @@ begin
     'is_you', coalesce(pr.id = auth.uid(), false),
     'plans', pr.plans,
     'period', p_period,
+    -- plans as stored (legacy string or list shape); plans_monthly_usd is its summed cost.
+    -- plan_monthly_usd is the older name for the same number.
+    'plans_monthly_usd', plan_monthly,
     'plan_monthly_usd', plan_monthly,
     'period_days', round(v_days, 2),
     'plan_period_usd', round(plan_monthly * v_days / 30.4375, 2),

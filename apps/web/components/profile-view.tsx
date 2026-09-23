@@ -8,12 +8,11 @@ import { SponsorStrip, SponsorThisSpot } from "@/components/sponsor";
 import type { ProfilePage } from "@/lib/data";
 import { formatPct, formatRoi, formatTokens, formatUsd, roiOf } from "@/lib/format";
 import { PERIOD_LABEL, PERIODS } from "@/lib/periods";
-import { PROVIDER_LABEL, type Provider } from "@/lib/plans";
+import { describePlans } from "@/lib/plans";
 import type { Sponsor } from "@/lib/sponsors";
 
 export function ProfileView({ p, sponsor = null }: { p: ProfilePage; sponsor?: Sponsor | null }) {
   const roi = roiOf(p.api_equiv_usd, p.plan_period_usd);
-  const planList = Object.entries(p.plans ?? {});
   const unpriced = p.models.filter((m) => !m.priced);
 
   return (
@@ -36,7 +35,7 @@ export function ProfileView({ p, sponsor = null }: { p: ProfilePage; sponsor?: S
         <Chips label="Period" items={PERIODS.map((x) => ({ value: x, label: PERIOD_LABEL[x] }))} active={p.period} href={(x) => `/u/${p.handle}?period=${x}`} />
       </header>
 
-      <RoiPoster p={p} roi={roi} planList={planList} />
+      <RoiPoster p={p} roi={roi} />
       {p.public && (sponsor ? <SponsorStrip s={sponsor} /> : <SponsorThisSpot label="Sponsor this spot" className="mt-3" />)}
 
       <dl className="sticker mt-8 grid grid-cols-2 overflow-hidden sm:grid-cols-4">
@@ -121,7 +120,9 @@ export function ProfileView({ p, sponsor = null }: { p: ProfilePage; sponsor?: S
  * The share-ready card: the multiple as a poster, gold, with a "paid for itself" stamp once
  * the plan has. Without a plan, the dollar figure takes the stage instead.
  */
-function RoiPoster({ p, roi, planList }: { p: ProfilePage; roi: number | null; planList: [string, string][] }) {
+function RoiPoster({ p, roi }: { p: ProfilePage; roi: number | null }) {
+  const monthly = Number(p.plans_monthly_usd ?? p.plan_monthly_usd) || 0;
+  const planText = describePlans(p.plans, { provider: true });
   const paidOff = roi !== null && roi >= 1;
   const periodWord = PERIOD_LABEL[p.period].toLowerCase();
   return (
@@ -138,9 +139,8 @@ function RoiPoster({ p, roi, planList }: { p: ProfilePage; roi: number | null; p
             {roi !== null ? (
               <>
                 <strong className="font-bold">{formatUsd(p.api_equiv_usd)}</strong> of API-equivalent usage against{" "}
-                {formatUsd(p.plan_period_usd, { cents: true })} of plan cost for the period (
-                {planList.map(([prov, plan]) => `${PROVIDER_LABEL[prov as Provider] ?? prov} ${plan}`).join(", ")},{" "}
-                {formatUsd(p.plan_monthly_usd, { cents: true })}/mo).
+                {formatUsd(monthly, { cents: true })}/mo of plans{planText ? ` (${planText})` : ""}. Prorated to the period:{" "}
+                {formatUsd(p.plan_period_usd, { cents: true })}.
               </>
             ) : (
               <>No plan set, so no ROI. {p.is_you ? <Link href="/me" className="font-bold underline">Set one</Link> : null}</>

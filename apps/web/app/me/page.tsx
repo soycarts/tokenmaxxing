@@ -8,7 +8,8 @@ import { SignInButton } from "@/components/sign-in";
 import { SubmitButton } from "@/components/submit-button";
 import { formatDate } from "@/lib/format";
 import { suggestHandle } from "@/lib/handles";
-import { PLANS, PROVIDER_LABEL, PROVIDERS, type Plans } from "@/lib/plans";
+import { PlansForm } from "@/components/plans-form";
+import { rowsFromPlans, sanitizePlans } from "@/lib/plans";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient, getSessionUser } from "@/lib/supabase/server";
 import {
@@ -62,7 +63,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
     .from("profiles")
     .select("handle, public, plans")
     .eq("id", user.id)
-    .maybeSingle<{ handle: string; public: boolean; plans: Plans }>();
+    .maybeSingle<{ handle: string; public: boolean; plans: unknown }>();
 
   if (!profile) {
     return (
@@ -111,25 +112,16 @@ export default async function MePage({ searchParams }: { searchParams: Promise<R
         </div>
       </Block>
 
-      <Block title="Plans" note="What you pay per month. Used for ROI; leave a provider on None if you pay per token.">
-        <form action={savePlans} className="grid gap-4 sm:grid-cols-2">
-          {PROVIDERS.map((provider) => (
-            <label key={provider} className="block">
-              <span className="text-sm font-semibold">{PROVIDER_LABEL[provider]}</span>
-              <select name={`plan_${provider}`} defaultValue={profile.plans?.[provider] ?? ""} className={`${inputClass} mt-1`}>
-                <option value="">None</option>
-                {Object.entries(PLANS[provider]).map(([plan, usd]) => (
-                  <option key={plan} value={plan}>
-                    {plan} (${usd}/mo)
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
-          <div className="sm:col-span-2">
-            <SubmitButton className={primaryButtonClass}>Save plans</SubmitButton>
-          </div>
-        </form>
+      <Block
+        id="plans"
+        title="Plans"
+        note="What you pay per month, every seat. Used for ROI. Several plans from one provider add up; leave a provider on None if you pay per token."
+      >
+        <PlansForm
+          key={JSON.stringify(profile.plans ?? {})}
+          action={savePlans}
+          initial={{ rows: rowsFromPlans(sanitizePlans(profile.plans)), v: 0 }}
+        />
       </Block>
 
       <Block title="Devices" note="Each machine you linked with the CLI. Revoking stops future pushes; past usage stays.">
@@ -252,9 +244,9 @@ function Shell({ children, handle }: { children: React.ReactNode; handle?: strin
   );
 }
 
-function Block({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Block({ id, title, note, children }: { id?: string; title: string; note?: string; children: React.ReactNode }) {
   return (
-    <section className="sticker mt-10 px-5 py-6 sm:px-7">
+    <section id={id} className="sticker mt-10 scroll-mt-6 px-5 py-6 sm:px-7">
       <h2 className="display text-3xl">{title}</h2>
       {note && <p className="mt-1.5 max-w-[64ch] text-sm text-ink-2">{note}</p>}
       <div className="mt-5">{children}</div>

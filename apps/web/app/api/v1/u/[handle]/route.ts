@@ -1,6 +1,7 @@
 import { getProfilePage } from "@/lib/data";
 import { json, PUBLIC_CACHE } from "@/lib/http";
 import { HANDLE_RE, PERIODS, type Period } from "@/lib/periods";
+import { sanitizePlans } from "@/lib/plans";
 
 /** GET /api/v1/u/{handle}?period=month: public profile aggregates, 404 if not public. */
 export async function GET(request: Request, ctx: { params: Promise<{ handle: string }> }) {
@@ -15,5 +16,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ handle: str
   if (res.error) return json({ error: "server_error" }, { status: 500 });
   if (!res.data) return json({ error: "not_found" }, { status: 404, cache: PUBLIC_CACHE });
   const { is_you: _isYou, ...profile } = res.data;
-  return json(profile, { cache: PUBLIC_CACHE });
+  // plans always in the list shape, whatever is stored; plans_monthly_usd is the summed cost.
+  const monthly = Number(profile.plans_monthly_usd ?? profile.plan_monthly_usd) || 0;
+  return json({ ...profile, plans: sanitizePlans(profile.plans), plans_monthly_usd: monthly }, { cache: PUBLIC_CACHE });
 }

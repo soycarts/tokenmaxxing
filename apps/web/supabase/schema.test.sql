@@ -24,7 +24,7 @@ insert into auth.users (id) select alice from t_ids union all select bob from t_
 insert into public.profiles (id, handle, public, plans)
 select alice, 'tm-test-alice', true, '{"claude":"max-20x"}'::jsonb from t_ids
 union all select bob, 'tm-test-bob', true, '{}'::jsonb from t_ids
-union all select carol, 'tm-test-carol', false, '{"claude":"pro"}'::jsonb from t_ids;
+union all select carol, 'tm-test-carol', false, '{"claude":[{"plan":"pro","qty":2}]}'::jsonb from t_ids;
 
 insert into public.devices (id, user_id, name)
 select dev_a, alice, 'a' from t_ids
@@ -67,6 +67,34 @@ begin
       raise exception 'model_key(%) = %, expected %', c.input, public.model_key(c.input), c.expected;
     end if;
   end loop;
+end $$;
+
+-- plans_monthly_usd: the legacy string shape, the list shape, and a provider mixing
+-- listed, custom and legacy-style string lines. Same rules as sanitizePlans in lib/plans.ts.
+do $$
+declare c record;
+begin
+  for c in select * from (values
+    ('{"claude":"max-20x"}', 200),
+    ('{"claude":"max-20x","openai":"pro","google":"ai-pro"}', 419.99),
+    ('{"claude":[{"plan":"max-20x","qty":5},{"plan":"pro","qty":1}]}', 1020),
+    ('{"claude":[{"plan":"max-20x","qty":5},{"plan":"pro"}],"openai":[{"plan":"pro","qty":2},{"plan":"custom","label":"Codex $100 promo","monthly":100},"plus"],"cursor":"teams"}', 1580),
+    ('{"openai":[{"plan":"custom","label":"x","monthly":12.5,"qty":2}]}', 25),
+    ('{"google":[{"plan":"ai-plus","qty":3},{"plan":"ai-ultra-100"}]}', 114.96),
+    -- nothing priceable: unknown providers and plans, bad qty, bad custom amounts, junk
+    ('{"claude":"ultra","evil":"pro","openai":"enterprise"}', 0),
+    ('{"claude":[{"plan":"pro","qty":0},{"plan":"pro","qty":100},{"plan":"pro","qty":1.5},{"plan":"pro","qty":"2"},{"plan":"pro","qty":null},{"qty":1},{"plan":7},7,null,[]]}', 0),
+    ('{"openai":[{"plan":"custom","monthly":0},{"plan":"custom","monthly":10001},{"plan":"custom","monthly":"50"},{"plan":"custom"}],"evil":[{"plan":"custom","monthly":5}]}', 0),
+    ('{"claude":{"plan":"pro"},"openai":42,"cursor":null}', 0),
+    ('{}', 0),
+    ('[]', 0),
+    ('"pro"', 0)
+  ) as t(plans, expected) loop
+    if public.plans_monthly_usd(c.plans::jsonb) is distinct from c.expected::numeric then
+      raise exception 'plans_monthly_usd(%) = %, expected %', c.plans, public.plans_monthly_usd(c.plans::jsonb), c.expected;
+    end if;
+  end loop;
+  if public.plans_monthly_usd(null) <> 0 then raise exception 'plans_monthly_usd(null) should be 0'; end if;
 end $$;
 
 -- -------------------------------------------------------------- leaderboards (as anon)
@@ -156,6 +184,24 @@ end $$;
 
 reset role;
 
+-- ROI with several lines: alice now holds 5× Max 20x and 1× Pro ($1,020/mo).
+update public.profiles set plans = '{"claude":[{"plan":"max-20x","qty":5},{"plan":"pro","qty":1}]}' where handle = 'tm-test-alice';
+set local role anon;
+do $$
+declare r record;
+begin
+  select * into r from public.leaderboard('week', 'roi') where handle = 'tm-test-alice';
+  if abs(r.roi - 125.968 / (1020 * 7 / 30.4375)) > 0.001 then raise exception 'roi (multi-plan): alice %', r.roi; end if;
+  if abs(r.plan_usd - round(1020 * 7 / 30.4375, 2)) > 0.001 then raise exception 'roi (multi-plan): alice plan_usd %', r.plan_usd; end if;
+  if (public.profile_page('tm-test-alice', 'week') ->> 'plans_monthly_usd')::numeric <> 1020 then
+    raise exception 'profile_page plans_monthly_usd (multi-plan) %', public.profile_page('tm-test-alice', 'week') ->> 'plans_monthly_usd';
+  end if;
+  if abs((public.badge_stats('tm-test-alice', 'week') ->> 'roi')::numeric - round(125.968 / (1020 * 7 / 30.4375), 2)) > 0.011 then
+    raise exception 'badge roi (multi-plan) %', public.badge_stats('tm-test-alice', 'week') ->> 'roi';
+  end if;
+end $$;
+reset role;
+
 -- --------------------------------------------------------------- signed-in users
 select set_config('request.jwt.claims', json_build_object('sub', carol, 'role', 'authenticated')::text, true) from t_ids;
 set local role authenticated;
@@ -164,6 +210,12 @@ do $$
 begin
   if public.profile_page('tm-test-carol', 'week') is null then raise exception 'carol cannot see her own private profile'; end if;
   if not (public.profile_page('tm-test-carol', 'week') ->> 'is_you')::boolean then raise exception 'is_you should be true'; end if;
+  if (public.profile_page('tm-test-carol', 'week') -> 'plans') <> '{"claude":[{"plan":"pro","qty":2}]}'::jsonb then
+    raise exception 'profile_page should return plans as stored, got %', public.profile_page('tm-test-carol', 'week') -> 'plans';
+  end if;
+  if (public.profile_page('tm-test-carol', 'week') ->> 'plans_monthly_usd')::numeric <> 40 then
+    raise exception 'profile_page plans_monthly_usd %', public.profile_page('tm-test-carol', 'week') ->> 'plans_monthly_usd';
+  end if;
   if (select count(*) from public.buckets) <> 1 then raise exception 'carol should read exactly her 1 bucket row'; end if;
   begin
     update public.profiles set handle = 'tm-test-carol2' where handle = 'tm-test-carol';
@@ -172,6 +224,14 @@ begin
   end;
   update public.profiles set plans = '{"claude":"max-5x"}' where handle = 'tm-test-carol';
   if not found then raise exception 'carol could not update her plans'; end if;
+  update public.profiles set plans = '{"claude":[{"plan":"max-5x","qty":3}],"openai":[{"plan":"custom","label":"Codex","monthly":100}]}'
+  where handle = 'tm-test-carol';
+  if not found then raise exception 'carol could not save plans in the list shape'; end if;
+  begin
+    update public.profiles set plans = jsonb_build_object('claude', repeat('x', 20000)) where handle = 'tm-test-carol';
+    raise exception 'an oversized plans document was accepted';
+  exception when check_violation then null;
+  end;
   update public.profiles set public = true where handle = 'tm-test-bob';
   if found then raise exception 'carol updated bob'; end if;
 end $$;
