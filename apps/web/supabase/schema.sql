@@ -509,7 +509,8 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 -- metric: value = api_equiv_usd desc; roi = api_equiv_usd / plan cost over the period
--- (Σ monthly plan prices × period_days / 30.4375, users with a plan only); efficiency =
+-- (Σ monthly plan prices × period_days / 30.4375; only users whose plans total at least
+-- $20/month, the cheapest real plan, so a $0.01 custom line cannot top the board); efficiency =
 -- output tokens per API-equivalent dollar, min $5; volume = tokens_total desc.
 drop function if exists public.leaderboard(text, text);
 create function public.leaderboard(p_period text default 'week', p_metric text default 'value')
@@ -528,13 +529,14 @@ begin
   return query
   with s as (
     select pr.handle, pr.display_name, pr.avatar_url, st.*,
+           public.plans_monthly_usd(pr.plans) as plan_monthly,
            public.plans_monthly_usd(pr.plans) * st.period_days / 30.4375 as plan_cost
     from public._period_stats(p_period) st
     join public.profiles pr on pr.id = st.user_id
     where pr.public and st.tokens_total > 0
   ), m as (
     select s.*,
-      case when s.plan_cost > 0 then s.api_equiv_usd / s.plan_cost end as roi_v,
+      case when s.plan_monthly >= 20 and s.plan_cost > 0 then s.api_equiv_usd / s.plan_cost end as roi_v,
       case when s.api_equiv_usd >= 5 then s.output_tokens / s.api_equiv_usd end as eff_v
     from s
   ), f as (

@@ -202,6 +202,25 @@ begin
 end $$;
 reset role;
 
+-- ROI board floor: plans under $20/month (a $1 custom line) are not ranked on the ROI board,
+-- but still appear on the value board and still get a profile/badge ROI.
+update public.profiles set plans = '{"openai":[{"plan":"custom","label":"promo","monthly":1,"qty":1}]}' where handle = 'tm-test-alice';
+set local role anon;
+do $$
+begin
+  if exists (select 1 from public.leaderboard('week', 'roi') where handle = 'tm-test-alice') then
+    raise exception 'roi floor: alice with a $1 plan must not be ranked on the roi board';
+  end if;
+  if not exists (select 1 from public.leaderboard('week', 'value') where handle = 'tm-test-alice') then
+    raise exception 'roi floor: alice must still be on the value board';
+  end if;
+  if public.badge_stats('tm-test-alice', 'week') ->> 'roi' is null then
+    raise exception 'roi floor: badge roi should still be computed for the owner';
+  end if;
+end $$;
+reset role;
+update public.profiles set plans = '{"claude":[{"plan":"max-20x","qty":5},{"plan":"pro","qty":1}]}' where handle = 'tm-test-alice';
+
 -- --------------------------------------------------------------- signed-in users
 select set_config('request.jwt.claims', json_build_object('sub', carol, 'role', 'authenticated')::text, true) from t_ids;
 set local role authenticated;
