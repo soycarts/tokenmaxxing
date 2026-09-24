@@ -18,5 +18,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ handle: str
   const { is_you: _isYou, ...profile } = res.data;
   // plans always in the list shape, whatever is stored; plans_monthly_usd is the summed cost.
   const monthly = Number(profile.plans_monthly_usd ?? profile.plan_monthly_usd) || 0;
-  return json({ ...profile, plans: sanitizePlans(profile.plans), plans_monthly_usd: monthly }, { cache: PUBLIC_CACHE });
+  // ROI for the period: API-equivalent usage over what the plans cost for that many days.
+  const periodCost = Number(profile.plan_period_usd) || 0;
+  const usd = Number(profile.api_equiv_usd) || 0;
+  const roi = periodCost > 0 ? Math.round((usd / periodCost) * 100) / 100 : null;
+  return json({ ...profile, plans: sanitizePlans(profile.plans), plans_monthly_usd: monthly, roi }, { cache: PUBLIC_CACHE });
 }
