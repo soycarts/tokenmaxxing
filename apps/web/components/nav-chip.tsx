@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-export const chipClass =
-  "press display inline-flex h-10 items-center rounded-full px-4 text-[0.95rem] leading-none tracking-[0.03em] no-underline [--lift:3px]";
+import { chipClass } from "@/components/chip";
+
+export { chipClass };
 
 /** A header chip. The current section is pressed in and filled with its candy colour. */
 export function NavChip({ href, tone, children }: { href: string; tone: string; children: React.ReactNode }) {
