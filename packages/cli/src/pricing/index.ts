@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { Bucket } from '../types.js';
 
-export const SNAPSHOT_DATE = '2026-09-22';
+export const SNAPSHOT_DATE = '2026-09-26';
 
 /** USD per token. */
 export interface Rates {
